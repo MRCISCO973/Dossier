@@ -1,0 +1,3940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dossier">
+<title>Dossier — World Cup Match Model</title>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   Palette: paper / ink / vermillion / sage / worn-gold
+   Type: condensed display for team names & numbers (tabular),
+         plain humanist body face for explanation text
+   ============================================================ */
+:root {
+  --paper:      #F7F5F0;
+  --paper-dim:  #EDEAE2;
+  --ink:        #15171C;
+  --ink-soft:   #4A4D56;
+  --ink-faint:  #9A9C9E;
+  --vermillion: #C4402E;
+  --vermillion-soft: #C4402E1A;
+  --sage:       #5C7A6E;
+  --sage-soft:  #5C7A6E1A;
+  --gold:       #A89968;
+  --gold-soft:  #A8996833;
+  --line:       #15171C26;
+  --line-soft:  #15171C12;
+
+  --display: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  --body: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --mono: "SF Mono", "Menlo", monospace;
+
+  color-scheme: light;
+}
+
+
+/* Display font treatment: condensed feel using font-stretch where supported,
+   falls back gracefully to standard width on older WebKit */
+[class*="brand"], .team-name, .verdict-label, .section-label, .why-toggle,
+.advance-card .section-label, .data-card-title, .tab-label, .team-select,
+.team-count-box .num, .vs-mark, .host-badge {
+  font-stretch: condensed;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 600px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ---------- Tabular numerals everywhere numbers appear ---------- */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 20px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--paper);
+}
+.topbar .brand {
+  font-family: var(--display);
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.topbar .brand span { color: var(--vermillion); }
+.topbar .nav-btn {
+  font-family: var(--body);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  padding: 7px 14px;
+}
+.topbar .nav-btn:active { background: var(--paper-dim); }
+
+/* ---------- Install banner & instructions ---------- */
+.install-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: var(--ink);
+  color: var(--paper);
+}
+.install-banner.hidden { display: none; }
+.install-banner-icon {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.install-banner-text {
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+.install-banner-text b { color: var(--gold); }
+.install-banner-btn {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  border-radius: 100px;
+  padding: 7px 13px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.install-banner-dismiss {
+  background: none;
+  border: none;
+  color: #6B6E78;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 2px;
+  flex: 0 0 auto;
+}
+
+.install-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(21,23,28,0.7);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.install-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.install-sheet {
+  width: 100%;
+  background: var(--paper);
+  border-radius: 20px 20px 0 0;
+  padding: 24px 24px calc(env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateY(20px);
+  transition: transform 0.3s cubic-bezier(.16,1,.3,1);
+}
+.install-overlay.show .install-sheet { transform: translateY(0); }
+.install-sheet-title {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.install-sheet-sub {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 22px;
+}
+.install-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.install-step:last-of-type { border-bottom: none; }
+.install-step-num {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--paper-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.install-step-icon {
+  width: 30px; height: 30px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.install-step-text {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.install-step-text b { color: var(--vermillion); }
+.install-sheet-close {
+  margin-top: 20px;
+}
+
+/* ---------- Screen container ---------- */
+.screen {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  display: none;
+}
+.screen.active { display: block; }
+
+/* ============================================================
+   MATCH PICKER
+   ============================================================ */
+.picker-section {
+  padding: 20px 20px 8px;
+}
+.section-label {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 10px;
+}
+.team-select-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.team-select {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: var(--display);
+  font-size: 17px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.vs-mark {
+  font-family: var(--display);
+  font-size: 13px;
+  color: var(--ink-faint);
+  letter-spacing: 0.1em;
+}
+.host-toggle-row {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-family: var(--body);
+  font-size: 13px;
+  padding: 7px 13px;
+  border-radius: 100px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink-soft);
+}
+.chip.active {
+  background: var(--gold-soft);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+/* ============================================================
+   MATCH DOSSIER (the signature view)
+   ============================================================ */
+.dossier {
+  padding: 28px 20px 8px;
+}
+.dossier-empty {
+  padding: 60px 28px;
+  text-align: center;
+  color: var(--ink-faint);
+}
+.dossier-empty .big {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.matchup-names {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.team-name {
+  font-family: var(--display);
+  font-size: 28px;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  max-width: 44%;
+}
+.team-name.right { text-align: right; }
+.team-name .host-badge {
+  display: inline-block;
+  font-family: var(--body);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 100px;
+  padding: 1px 7px;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* ---- Signature: tug-of-war probability bar ---- */
+.tugbar-wrap {
+  margin: 22px 0 6px;
+}
+.tugbar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--sage-soft);
+  overflow: visible;
+}
+.tugbar-fill {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  border-radius: 7px;
+  background: var(--vermillion);
+  transition: width 0.5s cubic-bezier(.16,1,.3,1);
+}
+.tugbar-draw-notch {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  background: var(--ink);
+  width: 3px;
+  border-radius: 2px;
+  opacity: 0.7;
+}
+.tugbar-marker {
+  position: absolute;
+  top: -7px;
+  width: 2px;
+  height: 28px;
+  background: var(--ink);
+  transform: translateX(-1px);
+}
+.tugbar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.tugbar-labels .pct { font-weight: 600; }
+.tugbar-labels .home-pct { color: var(--vermillion); }
+.tugbar-labels .away-pct { color: var(--sage); }
+.tugbar-draw-label {
+  text-align: center;
+  font-family: var(--body);
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ---- Headline verdict ---- */
+.verdict {
+  margin-top: 24px;
+  padding: 16px 18px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+}
+.verdict-label {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 4px;
+}
+.verdict-text {
+  font-size: 16px;
+  color: var(--ink);
+}
+.verdict-text b { color: var(--vermillion); }
+
+/* ---- Expandable "why" panel ---- */
+.why-toggle {
+  margin-top: 16px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--line-soft);
+  padding: 14px 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.why-toggle .chevron {
+  transition: transform 0.25s ease;
+  color: var(--ink-faint);
+}
+.why-toggle.open .chevron { transform: rotate(180deg); }
+
+.why-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+.why-panel.open { max-height: 600px; }
+
+.why-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.why-row:last-child { border-bottom: none; }
+.why-row-label {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.why-row-label .sub {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 1px;
+}
+.why-row-value {
+  font-family: var(--mono);
+  font-size: 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.advance-card {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: var(--sage-soft);
+  border-radius: 12px;
+  border: 1px solid var(--sage);
+}
+.advance-card .section-label { color: var(--sage); margin-bottom: 6px; }
+.advance-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 3px 0;
+}
+
+.caveat-box {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.caveat-box b { color: var(--ink); }
+
+/* ============================================================
+   DATA SCREEN
+   ============================================================ */
+.data-section {
+  padding: 20px 20px 0;
+}
+.data-card {
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.data-card-title {
+  font-family: var(--display);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.data-card-desc {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin-bottom: 14px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 13px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--ink);
+  color: var(--paper);
+}
+.btn:active { opacity: 0.85; }
+.btn.secondary {
+  background: white;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.btn.danger {
+  background: white;
+  color: var(--vermillion);
+  border: 1px solid var(--vermillion);
+}
+input[type="file"] { display: none; }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+.status-dot.ok { background: var(--sage); }
+.status-dot.warn { background: var(--vermillion); }
+
+.team-count-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+.team-count-box {
+  background: var(--paper-dim);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.team-count-box .num {
+  font-family: var(--display);
+  font-size: 22px;
+}
+.team-count-box .lbl {
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+textarea#pasteData {
+  width: 100%;
+  height: 90px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+
+/* ---------- Bottom tab bar ---------- */
+/* ============================================================
+   VEGA — paper-trading companion
+   ============================================================ */
+.vega-header {
+  margin: 16px 20px 4px;
+  background: linear-gradient(135deg, #1B1D24 0%, #15171C 100%);
+  border-radius: 14px;
+  padding: 20px 20px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.vega-header::before {
+  content: "";
+  position: absolute;
+  top: -30px; right: -30px;
+  width: 160px; height: 160px;
+  background: radial-gradient(circle, var(--gold) 0%, transparent 70%);
+  opacity: 0.18;
+}
+.vega-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  margin-bottom: 16px;
+}
+.vega-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+.vega-name {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--paper);
+  letter-spacing: 0.02em;
+}
+.vega-subtitle {
+  font-size: 11px;
+  color: #9A978C;
+  margin-top: 1px;
+}
+.vega-bankroll-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  position: relative;
+}
+.vega-bankroll {
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--paper);
+  line-height: 1;
+}
+.vega-bankroll-label {
+  font-size: 11px;
+  color: #9A978C;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+}
+.vega-record {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--paper);
+}
+.vega-record .sub {
+  display: block;
+  font-size: 10px;
+  color: #9A978C;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--body);
+  margin-top: 2px;
+}
+.vega-record.positive { color: #8FC77A; }
+.vega-record.negative { color: var(--vermillion); }
+
+.vega-controls {
+  margin: 14px 20px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.vega-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.vega-toggle {
+  position: relative;
+  width: 44px; height: 26px;
+  border-radius: 100px;
+  background: var(--line);
+  border: none;
+  flex: 0 0 auto;
+}
+.vega-toggle.on { background: var(--sage); }
+.vega-toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s ease;
+}
+.vega-toggle.on::after { transform: translateX(18px); }
+.vega-threshold-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.vega-threshold-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--vermillion);
+}
+
+.vega-disclosure {
+  margin: 0 20px 14px;
+  padding: 11px 14px;
+  background: var(--gold-soft);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+.vega-disclosure b { color: var(--ink); }
+
+.vega-ledger {
+  padding: 4px 20px 0;
+}
+.vega-ledger-title {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 6px 0 10px;
+}
+.vega-pick-card {
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.vega-pick-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.vega-pick-match {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+}
+.vega-pick-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+.vega-pick-status.pending { background: var(--gold-soft); color: var(--gold); }
+.vega-pick-status.won { background: var(--sage-soft); color: var(--sage); }
+.vega-pick-status.lost { background: var(--vermillion-soft); color: var(--vermillion); }
+.vega-pick-status.push { background: var(--paper-dim); color: var(--ink-faint); }
+.vega-pick-note {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+.vega-pick-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.vega-empty {
+  padding: 50px 28px;
+  text-align: center;
+  color: var(--ink-faint);
+}
+.vega-empty .big {
+  font-family: var(--display);
+  font-size: 20px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+/* ============================================================
+   LIVE SCREEN
+   ============================================================ */
+
+/* ---- Sport mode toggle ---- */
+.sport-toggle-row {
+  display: flex;
+  gap: 8px;
+  padding: 16px 20px 4px;
+}
+.sport-toggle-btn {
+  flex: 1;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 11px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--ink-soft);
+}
+.sport-toggle-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* ---- MLB home run suggestions ---- */
+.mlb-intro-card {
+  margin: 16px 20px 4px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.mlb-date-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 8px;
+}
+.mlb-date-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: white;
+  font-family: var(--display);
+  font-size: 16px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+.mlb-date-label {
+  flex: 1;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+.mlb-game-card {
+  margin: 0 20px 10px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.mlb-game-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.mlb-game-teams {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+}
+.mlb-game-venue {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+.mlb-game-pitchers {
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.mlb-game-pitchers .label {
+  color: var(--ink-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 2px;
+}
+.mlb-weather-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--paper-dim);
+  padding: 3px 9px;
+  border-radius: 100px;
+  margin-top: 8px;
+}
+.mlb-park-factor-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  margin-top: 8px;
+  margin-left: 6px;
+}
+.mlb-park-factor-pill.high { background: var(--vermillion-soft); color: var(--vermillion); }
+.mlb-park-factor-pill.low { background: var(--sage-soft); color: var(--sage); }
+.mlb-park-factor-pill.neutral { background: var(--paper-dim); color: var(--ink-faint); }
+
+.mlb-back-btn {
+  margin: 16px 20px 8px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.mlb-suggestion-card {
+  margin: 0 20px 10px;
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.mlb-suggestion-card.top-pick {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.mlb-suggestion-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.mlb-suggestion-rank {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+.mlb-suggestion-name {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+}
+.mlb-suggestion-sub {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.mlb-suggestion-score {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--vermillion);
+}
+.mlb-suggestion-score .label {
+  display: block;
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mlb-factor-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  padding: 7px 0;
+  border-top: 1px solid var(--line-soft);
+}
+.mlb-factor-row:first-of-type { border-top: none; padding-top: 10px; }
+.mlb-factor-row .val { font-family: var(--mono); }
+.mlb-factor-row .val.boost { color: var(--vermillion); }
+.mlb-factor-row .val.drag { color: var(--sage); }
+
+/* ---- Strongest read (highest-confidence pick across live matches) ---- */
+.strongest-read-card {
+  margin: 16px 20px 4px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.strongest-read-card::before {
+  content: "";
+  position: absolute;
+  top: 0; right: 0;
+  width: 140px; height: 140px;
+  background: radial-gradient(circle, var(--vermillion) 0%, transparent 70%);
+  opacity: 0.25;
+  transform: translate(40px, -50px);
+}
+.strongest-read-eyebrow {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+  position: relative;
+}
+.strongest-read-match {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  position: relative;
+}
+.strongest-read-line {
+  font-size: 14px;
+  color: #D8D6CE;
+  position: relative;
+  margin-bottom: 14px;
+}
+.strongest-read-line b { color: var(--paper); }
+.strongest-read-pct {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 700;
+  position: relative;
+  line-height: 1;
+}
+.strongest-read-pct .label {
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 400;
+  color: #ACA99E;
+  display: block;
+  margin-top: 4px;
+}
+.strongest-read-tap {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.strongest-read-empty {
+  margin: 16px 20px 4px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+/* ---- Reasoning panel (shared between pre-match dossier and live detail) ---- */
+.reasoning-section {
+  margin-top: 18px;
+}
+.reasoning-title {
+  font-family: var(--display);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 10px;
+}
+.reasoning-item {
+  display: flex;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.reasoning-item:last-child { border-bottom: none; }
+.reasoning-icon {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+.reasoning-icon.support { background: var(--sage-soft); color: var(--sage); }
+.reasoning-icon.caution { background: var(--vermillion-soft); color: var(--vermillion); }
+.reasoning-icon.neutral { background: var(--paper-dim); color: var(--ink-faint); }
+.reasoning-text {
+  font-size: 14px;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+.reasoning-text b { color: var(--ink); }
+
+.confidence-meter {
+  margin-top: 14px;
+  padding: 13px 16px;
+  background: var(--paper-dim);
+  border-radius: 10px;
+}
+.confidence-meter-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.confidence-meter-label {
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.confidence-meter-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.confidence-meter-track {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.confidence-meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.live-match-list {
+  padding: 16px 20px 0;
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--vermillion);
+}
+.live-pill .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--vermillion);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-match-card {
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+.live-match-card.selected {
+  border-color: var(--vermillion);
+  box-shadow: 0 0 0 1px var(--vermillion);
+}
+.live-match-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.live-match-teams {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+}
+.live-match-score {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  gap: 10px;
+}
+.live-match-meta {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.live-empty {
+  padding: 50px 28px;
+  text-align: center;
+  color: var(--ink-faint);
+}
+.live-empty .big {
+  font-family: var(--display);
+  font-size: 20px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 8px;
+}
+
+.live-detail {
+  padding: 20px 20px 8px;
+}
+.live-detail-back {
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.live-minute-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--paper-dim);
+  padding: 4px 10px;
+  border-radius: 100px;
+  margin-bottom: 4px;
+}
+.live-minute-badge.estimated::after {
+  content: "estimated";
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-left: 2px;
+}
+.minute-adjust-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.minute-adjust-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: white;
+  font-family: var(--display);
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+.minute-adjust-btn:active { background: var(--paper-dim); }
+
+.api-key-card {
+  background: white;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 16px 20px;
+}
+input#apiKeyInput {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  margin: 10px 0;
+}
+
+.tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  border-top: 1px solid var(--line-soft);
+  background: var(--paper);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 10px 2px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--ink-faint);
+}
+.tab-btn.active { color: var(--ink); }
+.tab-btn svg { width: 20px; height: 20px; }
+.tab-btn .tab-label {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-family: var(--display);
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 11px 18px;
+  border-radius: 100px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  z-index: 100;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">DOSSI<span>E</span>R</div>
+    <button class="nav-btn" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="install-banner hidden" id="installBanner">
+    <div class="install-banner-icon">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+    </div>
+    <div class="install-banner-text">Add <b>Dossier</b> to your Home Screen for quick, full-screen access.</div>
+    <button class="install-banner-btn" id="installBannerBtn">How</button>
+    <button class="install-banner-dismiss" id="installBannerDismiss">✕</button>
+  </div>
+
+  <div class="install-overlay" id="installOverlay">
+    <div class="install-sheet">
+      <div class="install-sheet-title">Add to Home Screen</div>
+      <div class="install-sheet-sub">Three taps, and Dossier opens like any other app — full screen, with its own icon.</div>
+
+      <div class="install-step">
+        <div class="install-step-num">1</div>
+        <div class="install-step-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M5 14v5a2 2 0 002 2h10a2 2 0 002-2v-5"/></svg>
+        </div>
+        <div class="install-step-text">Tap the <b>Share</b> icon in Safari's toolbar (the square with an arrow pointing up).</div>
+      </div>
+
+      <div class="install-step">
+        <div class="install-step-num">2</div>
+        <div class="install-step-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>
+        </div>
+        <div class="install-step-text">Scroll down and tap <b>Add to Home Screen</b>.</div>
+      </div>
+
+      <div class="install-step">
+        <div class="install-step-num">3</div>
+        <div class="install-step-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15171C" stroke-width="1.8"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <div class="install-step-text">Tap <b>Add</b> in the top right. Dossier now opens full-screen from your Home Screen.</div>
+      </div>
+
+      <button class="btn install-sheet-close" id="installSheetClose">Got it</button>
+    </div>
+  </div>
+
+  <!-- ============ PREDICT SCREEN ============ -->
+  <div class="screen active" id="screen-predict">
+    <div class="picker-section">
+      <div class="section-label">Match</div>
+      <div class="team-select-row">
+        <select class="team-select" id="teamA"></select>
+      </div>
+      <div style="text-align:center; padding: 10px 0 2px;" class="vs-mark">VS</div>
+      <div class="team-select-row">
+        <select class="team-select" id="teamB"></select>
+      </div>
+
+      <div class="host-toggle-row" id="hostChips"></div>
+    </div>
+
+    <div class="dossier" id="dossier">
+      <!-- populated by JS -->
+    </div>
+  </div>
+
+  <!-- ============ DATA SCREEN ============ -->
+  <div class="screen" id="screen-data">
+    <div class="data-section">
+
+      <div class="data-card">
+        <div class="data-card-title">Current data</div>
+        <div class="status-pill">
+          <span class="status-dot" id="dataStatusDot"></span>
+          <span id="dataStatusText">No data loaded</span>
+        </div>
+        <div class="team-count-grid" id="dataStats" style="display:none;">
+          <div class="team-count-box">
+            <div class="num tnum" id="statMatches">0</div>
+            <div class="lbl">Matches</div>
+          </div>
+          <div class="team-count-box">
+            <div class="num tnum" id="statTeams">0</div>
+            <div class="lbl">Teams</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="data-card">
+        <div class="data-card-title">Import match results</div>
+        <div class="data-card-desc">
+          Import a JSON or CSV file exported from the companion export script
+          (run on a computer with internet access — see the README in the
+          project download). Each import adds to what's already on this phone.
+        </div>
+        <label class="btn" for="fileInput">Choose file</label>
+        <input type="file" id="fileInput" accept=".json,.csv">
+      </div>
+
+      <div class="data-card">
+        <div class="data-card-title">Paste data directly</div>
+        <div class="data-card-desc">
+          Or paste JSON match data directly (useful if AirDrop/Files isn't
+          convenient). Expected format shown as placeholder.
+        </div>
+        <textarea id="pasteData" placeholder='[{"date":"2024-03-21","home_team":"Argentina","away_team":"Brazil","home_goals":1,"away_goals":1}]'></textarea>
+        <button class="btn secondary" id="pasteBtn">Add pasted data</button>
+      </div>
+
+      <div class="data-card">
+        <div class="data-card-title">Sample data</div>
+        <div class="data-card-desc">
+          No data yet? Load a small built-in sample set (recent major national
+          teams, illustrative only) to try the app immediately.
+        </div>
+        <button class="btn secondary" id="sampleBtn">Load sample data</button>
+      </div>
+
+      <div class="data-card">
+        <div class="data-card-title">Clear everything</div>
+        <div class="data-card-desc">Removes all imported match data from this phone.</div>
+        <button class="btn danger" id="clearBtn">Clear all data</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ LIVE SCREEN ============ -->
+  <div class="screen" id="screen-live">
+
+    <div class="sport-toggle-row">
+      <button class="sport-toggle-btn active" id="sportToggleSoccer">World Cup</button>
+      <button class="sport-toggle-btn" id="sportToggleMLB">MLB Home Runs</button>
+    </div>
+
+    <div id="soccerLiveContainer">
+      <div class="api-key-card" id="apiKeyCard">
+        <div class="data-card-title">Connect live scores</div>
+        <div class="data-card-desc">
+          Free API key from football-data.org (covers the World Cup, no
+          credit card needed). This is the only feature in the app that
+          makes network requests — everything else stays fully offline.
+        </div>
+        <input type="text" id="apiKeyInput" placeholder="Paste your X-Auth-Token here">
+        <button class="btn" id="saveApiKeyBtn">Save key</button>
+        <div class="data-card-desc" style="margin-top:10px; margin-bottom:0; font-size:12px;">
+          Get a free key at football-data.org/client/register. Scores refresh
+          roughly once a minute and may run slightly behind true real-time
+          on the free tier.
+        </div>
+      </div>
+
+      <div id="strongestReadContainer">
+        <!-- populated by JS: highlights the highest-confidence live outcome -->
+      </div>
+
+      <div class="live-match-list" id="liveMatchList">
+        <!-- populated by JS -->
+      </div>
+
+      <div class="live-detail" id="liveDetail" style="display:none;">
+        <!-- populated by JS when a live match is selected -->
+      </div>
+    </div>
+
+    <div id="mlbContainer" style="display:none;">
+      <div class="mlb-intro-card">
+        <div class="data-card-title">Home run suggestions</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Pick today's slate of games, and this ranks batters by a combined
+          read on their power, the park, and current weather at that
+          stadium. No API key needed — MLB's stats API and a free weather
+          service are both used directly, with no sign-up.
+        </div>
+      </div>
+
+      <div class="mlb-date-row">
+        <button class="mlb-date-btn" id="mlbDateBack">‹</button>
+        <span class="mlb-date-label" id="mlbDateLabel">Today</span>
+        <button class="mlb-date-btn" id="mlbDateForward">›</button>
+        <button class="btn secondary" id="mlbRefreshBtn" style="width:auto; padding:9px 16px; font-size:13px;">Refresh</button>
+      </div>
+
+      <div id="mlbGameList">
+        <!-- populated by JS -->
+      </div>
+
+      <div id="mlbSuggestionList" style="display:none;">
+        <!-- populated by JS when a game is selected -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ VEGA SCREEN ============ -->
+  <div class="screen" id="screen-vega">
+
+    <div class="vega-header">
+      <div class="vega-avatar-row">
+        <div class="vega-avatar">V</div>
+        <div>
+          <div class="vega-name">Vega</div>
+          <div class="vega-subtitle">Paper-trading companion · fictional money only</div>
+        </div>
+      </div>
+      <div class="vega-bankroll-row">
+        <div>
+          <div class="vega-bankroll tnum" id="vegaBankroll">$1,000</div>
+          <div class="vega-bankroll-label">Paper bankroll</div>
+        </div>
+        <div class="vega-record" id="vegaRecord">
+          0–0–0
+          <span class="sub">W–L–P</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="vega-disclosure">
+      <b>Entirely fictional.</b> Vega never touches real money, never places
+      a real bet, and has no connection to any sportsbook or payment
+      method. This is a running scoreboard of "what if," for entertainment.
+    </div>
+
+    <div class="vega-controls">
+      <div class="vega-controls-row">
+        <div>
+          <div style="font-size:14px; font-weight:600;">Vega is watching</div>
+          <div style="font-size:12px; color:var(--ink-faint);">Auto-logs a pick when confidence crosses the line below</div>
+        </div>
+        <button class="vega-toggle" id="vegaToggle"></button>
+      </div>
+      <div class="vega-threshold-row">
+        <span style="font-size:12px; color:var(--ink-faint);">Threshold</span>
+        <input type="range" id="vegaThreshold" min="50" max="90" step="5" value="65">
+        <span class="tnum" id="vegaThresholdValue" style="font-family:var(--mono); font-size:13px; min-width:32px;">65</span>
+      </div>
+      <button class="btn secondary" id="vegaResetBtn" style="margin-top:12px; font-size:13px; padding:10px;">Reset bankroll & case file</button>
+    </div>
+
+    <div class="vega-ledger">
+      <div class="vega-ledger-title">Case file</div>
+      <div id="vegaLedgerList">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============ ABOUT SCREEN ============ -->
+  <div class="screen" id="screen-about">
+    <div class="data-section">
+      <div class="data-card">
+        <div class="data-card-title">How this works</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Two independent models run entirely on this phone: an Elo-style
+          rating system that updates after every match result you import, and
+          a goal-scoring rate model (a simplified Dixon-Coles Poisson approach)
+          that estimates each team's attacking and defensive strength. Their
+          predictions are averaged into the probability you see on the Match
+          screen.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">World Cup adjustments</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Host nations (USA, Mexico, Canada for 2026) get a modest home
+          advantage applied; all other matchups are treated as neutral
+          venue. Knockout-stage moneylines settle on the 90-minutes-plus-
+          stoppage result — if it goes to extra time, the draw outcome wins
+          that bet regardless of who advances. The "To Advance" estimate
+          shown separately accounts for extra time and a 50/50 penalty
+          shootout assumption.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">What this can't see</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Squad news — injuries, suspensions, rotation, fatigue — isn't
+          reflected anywhere in this model. National teams also play far
+          fewer matches per year than club sides, so ratings here are
+          noisier and slower to update than a club-league model would be.
+          Treat every number on this screen as a starting point for your
+          own judgment, not a verdict.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">About the confidence score</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          The confidence score isn't the same as the win probability — a
+          match can show a lopsided probability and still score low on
+          confidence, if it's backed by little data or the two underlying
+          models disagree with each other. It factors in how lopsided the
+          probability is, whether the rating model and goal-scoring model
+          agree, how much historical data exists for both teams, and (for
+          live matches) how much time is left to play. The "strongest live
+          read" on the Live tab is chosen by this confidence score, not
+          simply by whichever match has the single highest percentage —
+          a near-certain result built on thin data is treated as less
+          trustworthy than a clear edge backed by solid data and model
+          agreement. This is meant to help you weigh a read, not to tell
+          you what to do with it.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">About Vega</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Vega is a fictional character with a paper portfolio, built for
+          entertainment. She never places a real bet, never touches real
+          money, and has no connection to any sportsbook, bank account, or
+          payment method — there isn't one anywhere in this app. When
+          switched on, she logs a paper "pick" whenever a live match's
+          confidence score crosses the threshold you set, sized by that
+          confidence, and settles it automatically once the match ends.
+          Her running bankroll and record are a what-if scoreboard, not a
+          forecast of how real betting would perform — past paper results
+          don't predict future ones any more than the underlying model
+          guarantees an edge against real bookmaker lines.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">About MLB home run suggestions</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          Switch the Live tab to "MLB Home Runs" to rank that day's batters
+          by a combined read on power, ballpark, and weather. No API key —
+          MLB's own stats API and a free weather service (Open-Meteo) are
+          used directly. The roughest part of this model, stated plainly:
+          "who they're facing" uses the opposing probable starting
+          pitcher's overall home-run rate, not real batter-vs-this-pitcher
+          history — that level of matchup detail (platoon splits,
+          pitch-type vulnerability) isn't available for free anywhere.
+          Park orientation used in the wind calculation is an approximation,
+          not a surveyed value. Treat the ranking as a starting point for
+          your own research, the same as everything else in this app.
+        </div>
+      </div>
+      <div class="data-card">
+        <div class="data-card-title">Not financial advice</div>
+        <div class="data-card-desc" style="margin-bottom:0;">
+          This app is a statistical reference tool. It is not a guarantee,
+          a recommendation, or a substitute for your own research. Bookmaker
+          odds already incorporate most public information; a model
+          disagreeing with the market is not the same as the model being
+          right.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <button class="tab-btn active" data-screen="predict">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12h4l2-7 4 14 2-7h4"/></svg>
+      <span class="tab-label">Match</span>
+    </button>
+    <button class="tab-btn" data-screen="data">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7a8 3 0 0016 0 8 3 0 00-16 0z"/><path d="M4 7v10a8 3 0 0016 0V7"/><path d="M4 12a8 3 0 0016 0"/></svg>
+      <span class="tab-label">Data</span>
+    </button>
+    <button class="tab-btn" data-screen="live">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      <span class="tab-label">Live</span>
+    </button>
+    <button class="tab-btn" data-screen="vega">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></svg>
+      <span class="tab-label">Vega</span>
+    </button>
+    <button class="tab-btn" data-screen="about">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>
+      <span class="tab-label">About</span>
+    </button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ---------------- Illustrative sample dataset ----------------
+   A small set of approximate recent results among major national teams,
+   for trying the app immediately. This is NOT a complete or rigorously
+   verified historical record -- replace it with real imported data
+   before relying on any prediction. Dates and scorelines are
+   illustrative/approximate.
+-------------------------------------------------------*/
+const SAMPLE_MATCHES = [
+  {date:"2024-03-22",home_team:"Argentina",away_team:"El Salvador",home_goals:3,away_goals:0},
+  {date:"2024-03-26",home_team:"Argentina",away_team:"Costa Rica",home_goals:3,away_goals:1},
+  {date:"2024-06-15",home_team:"Argentina",away_team:"Canada",home_goals:2,away_goals:0},
+  {date:"2024-06-20",home_team:"Argentina",away_team:"Chile",home_goals:1,away_goals:0},
+  {date:"2024-06-24",home_team:"Argentina",away_team:"Peru",home_goals:2,away_goals:0},
+  {date:"2024-07-14",home_team:"Argentina",away_team:"Colombia",home_goals:1,away_goals:0},
+  {date:"2024-09-06",home_team:"Argentina",away_team:"Chile",home_goals:3,away_goals:0},
+  {date:"2024-11-19",home_team:"Argentina",away_team:"Peru",home_goals:1,away_goals:0},
+
+  {date:"2024-03-23",home_team:"France",away_team:"Germany",home_goals:0,away_goals:2},
+  {date:"2024-03-26",home_team:"France",away_team:"Chile",home_goals:3,away_goals:2},
+  {date:"2024-06-17",home_team:"France",away_team:"Austria",home_goals:0,away_goals:1},
+  {date:"2024-06-21",home_team:"France",away_team:"Netherlands",home_goals:0,away_goals:0},
+  {date:"2024-06-25",home_team:"France",away_team:"Poland",home_goals:1,away_goals:1},
+  {date:"2024-07-01",home_team:"France",away_team:"Belgium",home_goals:1,away_goals:0},
+  {date:"2024-07-05",home_team:"France",away_team:"Portugal",home_goals:0,away_goals:0},
+  {date:"2024-07-09",home_team:"France",away_team:"Spain",home_goals:1,away_goals:2},
+  {date:"2024-09-05",home_team:"France",away_team:"Italy",home_goals:1,away_goals:3},
+  {date:"2024-11-14",home_team:"France",away_team:"Israel",home_goals:0,away_goals:0},
+
+  {date:"2024-03-22",home_team:"Brazil",away_team:"England",home_goals:1,away_goals:1},
+  {date:"2024-03-26",home_team:"Brazil",away_team:"Spain",home_goals:3,away_goals:3},
+  {date:"2024-06-15",home_team:"Brazil",away_team:"Costa Rica",home_goals:0,away_goals:0},
+  {date:"2024-06-19",home_team:"Brazil",away_team:"Paraguay",home_goals:4,away_goals:1},
+  {date:"2024-06-25",home_team:"Brazil",away_team:"Colombia",home_goals:1,away_goals:1},
+  {date:"2024-06-29",home_team:"Brazil",away_team:"Uruguay",home_goals:0,away_goals:0},
+  {date:"2024-09-06",home_team:"Brazil",away_team:"Ecuador",home_goals:1,away_goals:0},
+  {date:"2024-11-19",home_team:"Brazil",away_team:"Uruguay",home_goals:1,away_goals:0},
+
+  {date:"2024-03-23",home_team:"Spain",away_team:"Colombia",home_goals:0,away_goals:1},
+  {date:"2024-03-26",home_team:"Spain",away_team:"Brazil",home_goals:3,away_goals:3},
+  {date:"2024-06-15",home_team:"Spain",away_team:"Croatia",home_goals:3,away_goals:0},
+  {date:"2024-06-20",home_team:"Spain",away_team:"Italy",home_goals:1,away_goals:0},
+  {date:"2024-06-24",home_team:"Spain",away_team:"Albania",home_goals:1,away_goals:0},
+  {date:"2024-06-30",home_team:"Spain",away_team:"Georgia",home_goals:4,away_goals:1},
+  {date:"2024-07-05",home_team:"Spain",away_team:"Germany",home_goals:2,away_goals:1},
+  {date:"2024-07-09",home_team:"Spain",away_team:"France",home_goals:2,away_goals:1},
+  {date:"2024-07-14",home_team:"Spain",away_team:"England",home_goals:2,away_goals:1},
+  {date:"2024-09-05",home_team:"Spain",away_team:"Switzerland",home_goals:4,away_goals:1},
+
+  {date:"2024-03-22",home_team:"England",away_team:"Brazil",home_goals:1,away_goals:1},
+  {date:"2024-03-26",home_team:"England",away_team:"Belgium",home_goals:2,away_goals:2},
+  {date:"2024-06-16",home_team:"England",away_team:"Serbia",home_goals:1,away_goals:0},
+  {date:"2024-06-20",home_team:"England",away_team:"Denmark",home_goals:1,away_goals:1},
+  {date:"2024-06-25",home_team:"England",away_team:"Slovenia",home_goals:0,away_goals:0},
+  {date:"2024-06-30",home_team:"England",away_team:"Slovakia",home_goals:2,away_goals:1},
+  {date:"2024-07-06",home_team:"England",away_team:"Switzerland",home_goals:1,away_goals:1},
+  {date:"2024-07-10",home_team:"England",away_team:"Netherlands",home_goals:2,away_goals:1},
+  {date:"2024-09-07",home_team:"England",away_team:"Finland",home_goals:2,away_goals:0},
+
+  {date:"2024-03-21",home_team:"Germany",away_team:"France",home_goals:2,away_goals:0},
+  {date:"2024-03-26",home_team:"Germany",away_team:"Netherlands",home_goals:2,away_goals:1},
+  {date:"2024-06-14",home_team:"Germany",away_team:"Scotland",home_goals:5,away_goals:1},
+  {date:"2024-06-19",home_team:"Germany",away_team:"Hungary",home_goals:2,away_goals:0},
+  {date:"2024-06-23",home_team:"Germany",away_team:"Switzerland",home_goals:1,away_goals:1},
+  {date:"2024-06-29",home_team:"Germany",away_team:"Denmark",home_goals:2,away_goals:0},
+  {date:"2024-07-05",home_team:"Germany",away_team:"Spain",home_goals:1,away_goals:2},
+  {date:"2024-09-06",home_team:"Germany",away_team:"Hungary",home_goals:5,away_goals:0},
+
+  {date:"2024-03-23",home_team:"USA",away_team:"Jamaica",home_goals:2,away_goals:1},
+  {date:"2024-06-15",home_team:"USA",away_team:"Bolivia",home_goals:2,away_goals:0},
+  {date:"2024-06-23",home_team:"USA",away_team:"Panama",home_goals:1,away_goals:2},
+  {date:"2024-06-27",home_team:"USA",away_team:"Uruguay",home_goals:0,away_goals:1},
+  {date:"2024-09-07",home_team:"USA",away_team:"New Zealand",home_goals:1,away_goals:1},
+  {date:"2024-10-12",home_team:"USA",away_team:"Panama",home_goals:1,away_goals:0},
+  {date:"2024-11-15",home_team:"USA",away_team:"Jamaica",home_goals:3,away_goals:1},
+
+  {date:"2024-06-16",home_team:"Mexico",away_team:"Jamaica",home_goals:1,away_goals:0},
+  {date:"2024-06-22",home_team:"Mexico",away_team:"Venezuela",home_goals:1,away_goals:1},
+  {date:"2024-06-26",home_team:"Mexico",away_team:"Ecuador",home_goals:0,away_goals:1},
+  {date:"2024-09-07",home_team:"Mexico",away_team:"New Zealand",home_goals:2,away_goals:1},
+  {date:"2024-10-12",home_team:"Mexico",away_team:"Canada",home_goals:1,away_goals:1},
+  {date:"2024-11-18",home_team:"Mexico",away_team:"Honduras",home_goals:3,away_goals:0},
+
+  {date:"2024-06-15",home_team:"Morocco",away_team:"Congo DR",home_goals:1,away_goals:1},
+  {date:"2024-09-06",home_team:"Morocco",away_team:"Niger",home_goals:5,away_goals:1},
+  {date:"2024-10-15",home_team:"Morocco",away_team:"Mozambique",home_goals:3,away_goals:0},
+  {date:"2024-11-19",home_team:"Morocco",away_team:"Tanzania",home_goals:4,away_goals:0},
+
+  {date:"2024-06-08",home_team:"Croatia",away_team:"Portugal",home_goals:1,away_goals:2},
+  {date:"2024-06-15",home_team:"Croatia",away_team:"Spain",home_goals:0,away_goals:3},
+  {date:"2024-06-19",home_team:"Croatia",away_team:"Albania",home_goals:2,away_goals:2},
+  {date:"2024-06-24",home_team:"Croatia",away_team:"Italy",home_goals:1,away_goals:1},
+  {date:"2024-09-05",home_team:"Croatia",away_team:"Poland",home_goals:1,away_goals:0},
+
+  {date:"2024-03-21",home_team:"Portugal",away_team:"Sweden",home_goals:5,away_goals:2},
+  {date:"2024-06-08",home_team:"Portugal",away_team:"Croatia",home_goals:2,away_goals:1},
+  {date:"2024-06-18",home_team:"Portugal",away_team:"Czechia",home_goals:2,away_goals:1},
+  {date:"2024-06-22",home_team:"Portugal",away_team:"Turkey",home_goals:3,away_goals:0},
+  {date:"2024-06-26",home_team:"Portugal",away_team:"Georgia",home_goals:0,away_goals:2},
+  {date:"2024-07-01",home_team:"Portugal",away_team:"Slovenia",home_goals:0,away_goals:0},
+  {date:"2024-07-05",home_team:"Portugal",away_team:"France",home_goals:0,away_goals:0},
+  {date:"2024-09-05",home_team:"Portugal",away_team:"Croatia",home_goals:2,away_goals:1},
+
+  {date:"2024-06-16",home_team:"Belgium",away_team:"Slovakia",home_goals:0,away_goals:1},
+  {date:"2024-06-22",home_team:"Belgium",away_team:"Romania",home_goals:2,away_goals:0},
+  {date:"2024-06-26",home_team:"Belgium",away_team:"Ukraine",home_goals:0,away_goals:0},
+  {date:"2024-07-01",home_team:"Belgium",away_team:"France",home_goals:0,away_goals:1},
+  {date:"2024-09-05",home_team:"Belgium",away_team:"Israel",home_goals:1,away_goals:1},
+
+  {date:"2024-06-17",home_team:"Netherlands",away_team:"France",home_goals:0,away_goals:0},
+  {date:"2024-06-21",home_team:"Netherlands",away_team:"Austria",home_goals:2,away_goals:3},
+  {date:"2024-06-25",home_team:"Netherlands",away_team:"France",home_goals:0,away_goals:0},
+  {date:"2024-06-29",home_team:"Netherlands",away_team:"Romania",home_goals:3,away_goals:0},
+  {date:"2024-07-06",home_team:"Netherlands",away_team:"Turkey",home_goals:2,away_goals:1},
+  {date:"2024-07-10",home_team:"Netherlands",away_team:"England",home_goals:1,away_goals:2},
+
+  {date:"2024-06-15",home_team:"Italy",away_team:"Albania",home_goals:2,away_goals:1},
+  {date:"2024-06-20",home_team:"Italy",away_team:"Spain",home_goals:0,away_goals:1},
+  {date:"2024-06-24",home_team:"Italy",away_team:"Croatia",home_goals:1,away_goals:1},
+  {date:"2024-06-29",home_team:"Italy",away_team:"Switzerland",home_goals:0,away_goals:2},
+  {date:"2024-09-05",home_team:"Italy",away_team:"France",home_goals:3,away_goals:1},
+];
+/* ============================================================
+   DOSSIER — World Cup match model
+   All computation runs on-device. No network calls.
+   ============================================================ */
+
+const STORAGE_KEY = "dossier_matches_v1";
+const WORLD_CUP_2026_HOSTS = new Set(["USA", "Mexico", "Canada"]);
+const HOST_HOME_ADVANTAGE = 25;
+const NEUTRAL_HOME_ADVANTAGE = 0;
+
+/* ---------------- Elo rating system ----------------
+   Ported faithfully from elo.py / international.py:
+   - margin-of-victory weighted
+   - soccer-specific draw probability curve
+   - lower K-factor (14) appropriate for sparse international fixtures
+-------------------------------------------------------*/
+class EloRatingSystem {
+  constructor({ initialRating = 1500, kFactor = 14 } = {}) {
+    this.initialRating = initialRating;
+    this.kFactor = kFactor;
+    this.ratings = {};
+  }
+  getRating(team) { return this.ratings[team] ?? this.initialRating; }
+
+  expectedOutcomeProbs(home, away, homeAdvantage) {
+    const rHome = this.getRating(home) + homeAdvantage;
+    const rAway = this.getRating(away);
+    const diff = rHome - rAway;
+    const eHome = 1 / (1 + Math.pow(10, -diff / 400));
+    const drawProb = 0.28 * Math.exp(-Math.pow(diff / 400, 2) * 1.4);
+    const remaining = 1 - drawProb;
+    return [remaining * eHome, drawProb, remaining * (1 - eHome)];
+  }
+
+  _movMult(goalDiff, ratingDiff) {
+    goalDiff = Math.abs(goalDiff);
+    if (goalDiff === 0) return 1.0;
+    return Math.log(goalDiff + 1) * (2.2 / (Math.abs(ratingDiff) * 0.001 + 2.2));
+  }
+
+  update(home, away, homeGoals, awayGoals, homeAdvantage) {
+    const rHome = this.getRating(home);
+    const rAway = this.getRating(away);
+    const [pHome, pDraw, pAway] = this.expectedOutcomeProbs(home, away, homeAdvantage);
+
+    let actualHome, actualAway;
+    if (homeGoals > awayGoals) { actualHome = 1; actualAway = 0; }
+    else if (homeGoals < awayGoals) { actualHome = 0; actualAway = 1; }
+    else { actualHome = 0.5; actualAway = 0.5; }
+
+    const expectedHome = pHome + 0.5 * pDraw;
+    const expectedAway = pAway + 0.5 * pDraw;
+    const ratingDiff = rHome + homeAdvantage - rAway;
+    const k = this.kFactor * this._movMult(homeGoals - awayGoals, ratingDiff);
+
+    this.ratings[home] = rHome + k * (actualHome - expectedHome);
+    this.ratings[away] = rAway + k * (actualAway - expectedAway);
+  }
+
+  fitChronological(matches, hostResolver) {
+    this.ratings = {};
+    const sorted = [...matches].sort((a, b) => new Date(a.date) - new Date(b.date));
+    for (const m of sorted) {
+      const homeAdv = hostResolver ? hostResolver(m) : NEUTRAL_HOME_ADVANTAGE;
+      this.update(m.home_team, m.away_team, m.home_goals, m.away_goals, homeAdv);
+    }
+  }
+}
+
+/* ---------------- Goal-rate (Poisson-style) model ----------------
+   A standard iterative-proportional-fitting approximation of the
+   Dixon-Coles attack/defense model from poisson_model.py. Converges
+   to essentially the same place as full MLE for league/tournament-
+   sized data without needing a numerical optimizer in the browser.
+-------------------------------------------------------*/
+class GoalRateModel {
+  constructor() {
+    this.attack = {};
+    this.defense = {};
+    this.avgHomeGoals = 1.4;
+    this.avgAwayGoals = 1.1;
+    this.fitted = false;
+  }
+
+  fit(matches, halfLifeDays = 730) {
+    const teams = new Set();
+    matches.forEach(m => { teams.add(m.home_team); teams.add(m.away_team); });
+    teams.forEach(t => { this.attack[t] = 1.0; this.defense[t] = 1.0; });
+
+    if (matches.length === 0) { this.fitted = true; return this; }
+
+    const mostRecent = Math.max(...matches.map(m => new Date(m.date).getTime()));
+    const weight = (m) => {
+      const daysAgo = (mostRecent - new Date(m.date).getTime()) / 86400000;
+      return Math.pow(0.5, daysAgo / halfLifeDays);
+    };
+
+    let totalHomeGoals = 0, totalAwayGoals = 0, totalWeight = 0;
+    matches.forEach(m => {
+      const w = weight(m);
+      totalHomeGoals += m.home_goals * w;
+      totalAwayGoals += m.away_goals * w;
+      totalWeight += w;
+    });
+    this.avgHomeGoals = totalWeight > 0 ? totalHomeGoals / totalWeight : 1.4;
+    this.avgAwayGoals = totalWeight > 0 ? totalAwayGoals / totalWeight : 1.1;
+
+    for (let iter = 0; iter < 30; iter++) {
+      const attackNum = {}, attackDen = {}, defNum = {}, defDen = {};
+      teams.forEach(t => { attackNum[t] = 0; attackDen[t] = 0; defNum[t] = 0; defDen[t] = 0; });
+
+      matches.forEach(m => {
+        const w = weight(m);
+        const expHome = this.avgHomeGoals * this.attack[m.home_team] * this.defense[m.away_team];
+        const expAway = this.avgAwayGoals * this.attack[m.away_team] * this.defense[m.home_team];
+
+        attackNum[m.home_team] += w * m.home_goals;
+        attackDen[m.home_team] += w * (expHome / Math.max(this.attack[m.home_team], 1e-6));
+        attackNum[m.away_team] += w * m.away_goals;
+        attackDen[m.away_team] += w * (expAway / Math.max(this.attack[m.away_team], 1e-6));
+
+        defNum[m.away_team] += w * m.home_goals;
+        defDen[m.away_team] += w * (expHome / Math.max(this.defense[m.away_team], 1e-6));
+        defNum[m.home_team] += w * m.away_goals;
+        defDen[m.home_team] += w * (expAway / Math.max(this.defense[m.home_team], 1e-6));
+      });
+
+      teams.forEach(t => {
+        // Shrinkage toward 1.0 (league-average): international teams have
+        // far fewer matches than club sides, so unshrunk ratings can swing
+        // to extreme, overconfident values off a handful of results. This
+        // pulls each team's rating partway back toward average, with the
+        // amount of pull depending on how many matches that team has
+        // played (more matches = trust the data more, less shrinkage).
+        const matchCount = matches.filter(m => m.home_team === t || m.away_team === t).length;
+        const shrinkFactor = matchCount / (matchCount + 8); // 8-match "prior strength"
+
+        if (attackDen[t] > 1e-9) {
+          const raw = Math.max(0.2, Math.min(3.0, attackNum[t] / attackDen[t]));
+          this.attack[t] = 1.0 + (raw - 1.0) * shrinkFactor;
+        }
+        if (defDen[t] > 1e-9) {
+          const raw = Math.max(0.2, Math.min(3.0, defNum[t] / defDen[t]));
+          this.defense[t] = 1.0 + (raw - 1.0) * shrinkFactor;
+        }
+      });
+    }
+    this.fitted = true;
+    return this;
+  }
+
+  lambdas(home, away) {
+    const aH = this.attack[home] ?? 1.0, dH = this.defense[home] ?? 1.0;
+    const aA = this.attack[away] ?? 1.0, dA = this.defense[away] ?? 1.0;
+    return [this.avgHomeGoals * aH * dA, this.avgAwayGoals * aA * dH];
+  }
+
+  static _poissonPmf(k, lambda) {
+    return Math.exp(-lambda + k * Math.log(lambda) - GoalRateModel._logFactorial(k));
+  }
+  static _logFactorial(n) {
+    let r = 0;
+    for (let i = 2; i <= n; i++) r += Math.log(i);
+    return r;
+  }
+
+  predictOutcomeProbs(home, away, maxGoals = 10) {
+    const [lh, la] = this.lambdas(home, away);
+    let pHome = 0, pDraw = 0, pAway = 0;
+    for (let i = 0; i <= maxGoals; i++) {
+      const pi = GoalRateModel._poissonPmf(i, lh);
+      for (let j = 0; j <= maxGoals; j++) {
+        const p = pi * GoalRateModel._poissonPmf(j, la);
+        if (i > j) pHome += p; else if (i === j) pDraw += p; else pAway += p;
+      }
+    }
+    const total = pHome + pDraw + pAway || 1;
+    return [pHome / total, pDraw / total, pAway / total];
+  }
+
+  mostLikelyScore(home, away, maxGoals = 6) {
+    const [lh, la] = this.lambdas(home, away);
+    let best = [0, 0], bestP = -1;
+    for (let i = 0; i <= maxGoals; i++) {
+      for (let j = 0; j <= maxGoals; j++) {
+        const p = GoalRateModel._poissonPmf(i, lh) * GoalRateModel._poissonPmf(j, la);
+        if (p > bestP) { bestP = p; best = [i, j]; }
+      }
+    }
+    return best;
+  }
+}
+
+/* ---------------- App state & persistence ---------------- */
+const state = {
+  matches: [],
+  elo: new EloRatingSystem({ kFactor: 14 }),
+  goalModel: new GoalRateModel(),
+  teamA: null,
+  teamB: null,
+  hostNation: null,
+  whyOpen: false,
+};
+
+function hostResolverFor(match) {
+  // During fitting, we don't know which side is the "designated" host for
+  // historical matches unless explicitly marked; default neutral unless
+  // the match record itself specifies a host (used for past WC matches
+  // if your import includes that field).
+  if (match.host_team === match.home_team) return HOST_HOME_ADVANTAGE;
+  if (match.host_team === match.away_team) return -HOST_HOME_ADVANTAGE; // unusual case
+  return NEUTRAL_HOME_ADVANTAGE;
+}
+
+function saveMatches() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.matches));
+  } catch (e) {
+    showToast("Couldn't save — storage may be full");
+  }
+}
+
+function loadMatches() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    state.matches = raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    state.matches = [];
+  }
+}
+
+function refitModels() {
+  state.elo.fitChronological(state.matches, hostResolverFor);
+  state.goalModel.fit(state.matches);
+}
+
+function getAllTeams() {
+  const teams = new Set();
+  state.matches.forEach(m => { teams.add(m.home_team); teams.add(m.away_team); });
+  return [...teams].sort();
+}
+
+/* ---------------- Prediction logic (mirrors international.py) ---------------- */
+function predictMatch(teamA, teamB, hostNation) {
+  let homeAdv = NEUTRAL_HOME_ADVANTAGE;
+  let a = teamA, b = teamB;
+
+  if (hostNation === teamA) homeAdv = HOST_HOME_ADVANTAGE;
+  else if (hostNation === teamB) { homeAdv = HOST_HOME_ADVANTAGE; a = teamB; b = teamA; }
+
+  const [eH, eD, eA] = state.elo.expectedOutcomeProbs(a, b, homeAdv);
+  const [pH, pD, pA] = state.goalModel.fitted
+    ? state.goalModel.predictOutcomeProbs(a, b)
+    : [eH, eD, eA];
+
+  let blendH = (eH + pH) / 2, blendD = (eD + pD) / 2, blendA = (eA + pA) / 2;
+  const total = blendH + blendD + blendA || 1;
+  blendH /= total; blendD /= total; blendA /= total;
+
+  // Re-map back to teamA/teamB perspective if we swapped above
+  const result = (a === teamA)
+    ? { pTeamA: blendH, pDraw: blendD, pTeamB: blendA, eloA: eH, eloDraw: eD, eloB: eA, poisA: pH, poisDraw: pD, poisB: pA }
+    : { pTeamA: blendA, pDraw: blendD, pTeamB: blendH, eloA: eA, eloDraw: eD, eloB: eH, poisA: pA, poisDraw: pD, poisB: pH };
+
+  const score = state.goalModel.fitted ? state.goalModel.mostLikelyScore(a, b) : [1, 1];
+  result.likelyScore = (a === teamA) ? score : [score[1], score[0]];
+  result.eloRatingA = state.elo.getRating(teamA);
+  result.eloRatingB = state.elo.getRating(teamB);
+
+  return result;
+}
+
+function estimateAdvanceProbs(pA, pDraw, pB) {
+  return [pA + pDraw * 0.5, pB + pDraw * 0.5];
+}
+
+function matchCountFor(team) {
+  return state.matches.filter(m => m.home_team === team || m.away_team === team).length;
+}
+
+/* ============================================================
+   MATCH ANALYSIS / REASONING
+   Turns raw probabilities into a confidence score and a list of
+   plain-language reasons, so the highest-probability outcome is shown
+   as something to weigh rather than a bare number to trust blindly.
+   ============================================================ */
+function computeMatchAnalysis({ teamA, teamB, pA, pDraw, pB, eloA, eloDraw, eloB,
+                                  poisA, poisDraw, poisB, matchCountA, matchCountB,
+                                  isLive, minute, hostNation }) {
+  const favoredIsA = pA >= pB;
+  const favoredTeam = favoredIsA ? teamA : teamB;
+  const favoredPct = Math.max(pA, pB);
+  const opponentPct = Math.min(pA, pB);
+
+  const eloFavoredP = favoredIsA ? eloA : eloB;
+  const poisFavoredP = favoredIsA ? poisA : poisB;
+  const modelAgreementGap = Math.abs(eloFavoredP - poisFavoredP);
+
+  const minSampleSize = Math.min(matchCountA, matchCountB);
+  const sampleConfidence = Math.min(1, minSampleSize / 10);
+
+  const marginConfidence = favoredPct - opponentPct;
+
+  let timeConfidence = 1.0;
+  if (isLive && minute != null) {
+    const minutesRemaining = Math.max(90 - minute, 0);
+    timeConfidence = 1 - (minutesRemaining / 90) * 0.5;
+  }
+
+  const agreementScore = Math.max(0, 1 - modelAgreementGap / 0.3);
+  const overallConfidence = Math.round(
+    100 * (0.40 * marginConfidence + 0.25 * agreementScore + 0.20 * sampleConfidence + 0.15 * timeConfidence)
+  );
+
+  const reasons = [];
+
+  if (marginConfidence > 0.4) {
+    reasons.push({ type: "support", text: `<b>${favoredTeam}</b> is clearly favored, ${pct(favoredPct)} vs ${pct(opponentPct)} for the next-most-likely outcome.` });
+  } else if (marginConfidence > 0.15) {
+    reasons.push({ type: "neutral", text: `<b>${favoredTeam}</b> has a modest edge, ${pct(favoredPct)} vs ${pct(opponentPct)}.` });
+  } else {
+    reasons.push({ type: "caution", text: `This is close to a toss-up — only about ${(marginConfidence*100).toFixed(0)} points separate the leading outcomes.` });
+  }
+
+  if (modelAgreementGap < 0.08) {
+    reasons.push({ type: "support", text: `The rating model and the goal-scoring model agree on this lean.` });
+  } else if (modelAgreementGap < 0.2) {
+    reasons.push({ type: "neutral", text: `The two underlying models lean the same way but disagree on how strong the edge is.` });
+  } else {
+    reasons.push({ type: "caution", text: `The rating model and the goal-scoring model disagree meaningfully here — worth treating this read with extra caution.` });
+  }
+
+  if (minSampleSize < 5) {
+    reasons.push({ type: "caution", text: `Thin data: only ${minSampleSize} imported match${minSampleSize===1?'':'es'} for the lower-data team, so ratings here are noisier than usual.` });
+  } else if (minSampleSize < 10) {
+    reasons.push({ type: "neutral", text: `Moderate sample size (${minSampleSize} matches for the lower-data team).` });
+  } else {
+    reasons.push({ type: "support", text: `A reasonable sample size backs both teams' ratings (${minSampleSize}+ matches).` });
+  }
+
+  if (isLive && minute != null) {
+    const minutesRemaining = Math.max(90 - minute, 0);
+    if (minutesRemaining <= 10) {
+      reasons.push({ type: "support", text: `Only ${minutesRemaining} minutes left — the current score now carries most of the weight.` });
+    } else if (minutesRemaining <= 30) {
+      reasons.push({ type: "neutral", text: `${minutesRemaining} minutes remaining — still some time for this to change.` });
+    } else {
+      reasons.push({ type: "caution", text: `${minutesRemaining} minutes still to play — plenty of time left for the score to change.` });
+    }
+  }
+
+  if (hostNation === teamA || hostNation === teamB) {
+    reasons.push({ type: "neutral", text: `${hostNation} gets a modest home-nation boost as a 2026 host, factored into this read.` });
+  }
+
+  return {
+    favoredTeam, favoredPct, opponentPct,
+    overallConfidence: Math.max(0, Math.min(100, overallConfidence)),
+    reasons,
+  };
+}
+
+function confidenceColor(score) {
+  if (score >= 60) return "var(--sage)";
+  if (score >= 35) return "var(--gold)";
+  return "var(--vermillion)";
+}
+
+function renderReasoningHTML(analysis) {
+  const iconFor = (type) => type === "support" ? "✓" : (type === "caution" ? "!" : "·");
+  const itemsHTML = analysis.reasons.map(r => `
+    <div class="reasoning-item">
+      <div class="reasoning-icon ${r.type}">${iconFor(r.type)}</div>
+      <div class="reasoning-text">${r.text}</div>
+    </div>
+  `).join("");
+
+  return `
+    <div class="reasoning-section">
+      <div class="reasoning-title">Why this read</div>
+      ${itemsHTML}
+      <div class="confidence-meter">
+        <div class="confidence-meter-top">
+          <span class="confidence-meter-label">Confidence</span>
+          <span class="confidence-meter-value tnum">${analysis.overallConfidence}/100</span>
+        </div>
+        <div class="confidence-meter-track">
+          <div class="confidence-meter-fill" style="width:${analysis.overallConfidence}%; background:${confidenceColor(analysis.overallConfidence)};"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- UI rendering ---------------- */
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function populateTeamSelects() {
+  const teams = getAllTeams();
+  const teamA = document.getElementById("teamA");
+  const teamB = document.getElementById("teamB");
+  const prevA = state.teamA, prevB = state.teamB;
+
+  [teamA, teamB].forEach(sel => { sel.innerHTML = ""; });
+
+  if (teams.length === 0) {
+    [teamA, teamB].forEach(sel => {
+      const opt = document.createElement("option");
+      opt.textContent = "No teams loaded";
+      opt.disabled = true;
+      sel.appendChild(opt);
+    });
+    state.teamA = null; state.teamB = null;
+    renderDossier();
+    return;
+  }
+
+  teams.forEach(t => {
+    const optA = document.createElement("option");
+    optA.value = t; optA.textContent = t;
+    teamA.appendChild(optA);
+    const optB = document.createElement("option");
+    optB.value = t; optB.textContent = t;
+    teamB.appendChild(optB);
+  });
+
+  state.teamA = teams.includes(prevA) ? prevA : teams[0];
+  state.teamB = teams.includes(prevB) && prevB !== state.teamA
+    ? prevB
+    : (teams.find(t => t !== state.teamA) || teams[0]);
+
+  teamA.value = state.teamA;
+  teamB.value = state.teamB;
+
+  renderHostChips();
+  renderDossier();
+}
+
+function renderHostChips() {
+  const wrap = document.getElementById("hostChips");
+  wrap.innerHTML = "";
+  const label = document.createElement("div");
+  label.className = "section-label";
+  label.style.width = "100%";
+  label.style.marginTop = "14px";
+  label.textContent = "Host nation (if applicable)";
+  wrap.appendChild(label);
+
+  const options = [
+    { id: null, label: "Neutral venue" },
+    { id: state.teamA, label: state.teamA },
+    { id: state.teamB, label: state.teamB },
+  ];
+
+  options.forEach(opt => {
+    if (opt.id !== null && !WORLD_CUP_2026_HOSTS.has(opt.id)) return; // only show real hosts
+    const chip = document.createElement("button");
+    chip.className = "chip" + (state.hostNation === opt.id ? " active" : "");
+    chip.textContent = opt.label;
+    chip.onclick = () => { state.hostNation = opt.id; renderHostChips(); renderDossier(); };
+    wrap.appendChild(chip);
+  });
+}
+
+function pct(x) { return (x * 100).toFixed(1) + "%"; }
+
+function renderDossier() {
+  const dossier = document.getElementById("dossier");
+
+  if (!state.teamA || !state.teamB || state.teamA === state.teamB || state.matches.length === 0) {
+    dossier.innerHTML = `
+      <div class="dossier-empty">
+        <div class="big">${state.matches.length === 0 ? "No data yet" : "Pick two different teams"}</div>
+        <div>${state.matches.length === 0
+          ? "Head to the Data tab to import match results or load the sample set."
+          : "Choose two different national teams above to see a prediction."}</div>
+      </div>`;
+    return;
+  }
+
+  const r = predictMatch(state.teamA, state.teamB, state.hostNation);
+  const favoredA = r.pTeamA >= r.pTeamB;
+  const favoredPct = Math.max(r.pTeamA, r.pTeamB);
+  const favoredName = favoredA ? state.teamA : state.teamB;
+
+  const barFillPct = r.pTeamA * 100;
+  const drawCenterPct = r.pTeamA * 100 + (r.pDraw * 100) / 2;
+
+  const [advA, advB] = estimateAdvanceProbs(r.pTeamA, r.pDraw, r.pTeamB);
+
+  const analysis = computeMatchAnalysis({
+    teamA: state.teamA, teamB: state.teamB,
+    pA: r.pTeamA, pDraw: r.pDraw, pB: r.pTeamB,
+    eloA: r.eloA, eloDraw: r.eloDraw, eloB: r.eloB,
+    poisA: r.poisA, poisDraw: r.poisDraw, poisB: r.poisB,
+    matchCountA: matchCountFor(state.teamA), matchCountB: matchCountFor(state.teamB),
+    isLive: false, minute: null, hostNation: state.hostNation,
+  });
+
+  dossier.innerHTML = `
+    <div class="matchup-names">
+      <div class="team-name">${state.teamA}${state.hostNation === state.teamA ? '<span class="host-badge">HOST</span>' : ''}</div>
+      <div class="team-name right">${state.teamB}${state.hostNation === state.teamB ? '<span class="host-badge">HOST</span>' : ''}</div>
+    </div>
+
+    <div class="tugbar-wrap">
+      <div class="tugbar">
+        <div class="tugbar-fill" style="width:${barFillPct}%"></div>
+        <div class="tugbar-draw-notch" style="left:calc(${drawCenterPct}% - 1.5px)"></div>
+      </div>
+      <div class="tugbar-labels">
+        <span class="pct home-pct tnum">${pct(r.pTeamA)}</span>
+        <span class="pct away-pct tnum">${pct(r.pTeamB)}</span>
+      </div>
+      <div class="tugbar-draw-label">Draw ${pct(r.pDraw)}</div>
+    </div>
+
+    <div class="verdict">
+      <div class="verdict-label">Model read</div>
+      <div class="verdict-text">
+        <b>${favoredName}</b> favored at ${pct(favoredPct)} (regulation time).
+        Most likely scoreline: <b class="tnum">${r.likelyScore[0]}–${r.likelyScore[1]}</b>.
+      </div>
+    </div>
+
+    <button class="why-toggle" id="whyToggle">
+      <span>Why</span>
+      <span class="chevron">▾</span>
+    </button>
+    <div class="why-panel" id="whyPanel">
+      <div class="why-row">
+        <div class="why-row-label">Elo rating<span class="sub">${state.teamA} vs ${state.teamB}</span></div>
+        <div class="why-row-value tnum">${r.eloRatingA.toFixed(0)} – ${r.eloRatingB.toFixed(0)}</div>
+      </div>
+      <div class="why-row">
+        <div class="why-row-label">Elo model alone<span class="sub">H / D / A</span></div>
+        <div class="why-row-value tnum">${pct(r.eloA)} / ${pct(r.eloDraw)} / ${pct(r.eloB)}</div>
+      </div>
+      <div class="why-row">
+        <div class="why-row-label">Goal-rate model alone<span class="sub">H / D / A</span></div>
+        <div class="why-row-value tnum">${pct(r.poisA)} / ${pct(r.poisDraw)} / ${pct(r.poisB)}</div>
+      </div>
+      <div class="why-row">
+        <div class="why-row-label">Blended (shown above)<span class="sub">simple average of both models</span></div>
+        <div class="why-row-value tnum">${pct(r.pTeamA)} / ${pct(r.pDraw)} / ${pct(r.pTeamB)}</div>
+      </div>
+    </div>
+
+    ${renderReasoningHTML(analysis)}
+
+    <div class="advance-card">
+      <div class="section-label">If this is a knockout match</div>
+      <div class="advance-card-row"><span>${state.teamA} advances</span><span class="tnum">${pct(advA)}</span></div>
+      <div class="advance-card-row"><span>${state.teamB} advances</span><span class="tnum">${pct(advB)}</span></div>
+    </div>
+
+    <div class="caveat-box">
+      <b>Read before you act on this.</b> Squad news, injuries, and suspensions
+      aren't reflected here. National teams play few matches a year, so these
+      ratings are noisier than a club-league model. This is a statistical
+      starting point, not a recommendation.
+    </div>
+  `;
+
+  document.getElementById("whyToggle").onclick = () => {
+    state.whyOpen = !state.whyOpen;
+    document.getElementById("whyToggle").classList.toggle("open", state.whyOpen);
+    document.getElementById("whyPanel").classList.toggle("open", state.whyOpen);
+  };
+}
+
+function renderDataScreen() {
+  const dot = document.getElementById("dataStatusDot");
+  const text = document.getElementById("dataStatusText");
+  const statsBox = document.getElementById("dataStats");
+
+  if (state.matches.length === 0) {
+    dot.className = "status-dot";
+    text.textContent = "No data loaded";
+    statsBox.style.display = "none";
+  } else {
+    dot.className = "status-dot ok";
+    const dates = state.matches.map(m => new Date(m.date));
+    const min = new Date(Math.min(...dates));
+    const max = new Date(Math.max(...dates));
+    text.textContent = `${state.matches.length} matches, ${min.toLocaleDateString()} – ${max.toLocaleDateString()}`;
+    statsBox.style.display = "grid";
+    document.getElementById("statMatches").textContent = state.matches.length;
+    document.getElementById("statTeams").textContent = getAllTeams().length;
+  }
+}
+
+/* ---------------- Data import ---------------- */
+function normalizeMatch(raw) {
+  const homeGoals = raw.home_goals ?? raw.home_score ?? raw.FTHG;
+  const awayGoals = raw.away_goals ?? raw.away_score ?? raw.FTAG;
+  const homeTeam = raw.home_team ?? raw.HomeTeam;
+  const awayTeam = raw.away_team ?? raw.AwayTeam;
+  const date = raw.date ?? raw.Date;
+  if (!homeTeam || !awayTeam || homeGoals == null || awayGoals == null || !date) return null;
+  return {
+    date: new Date(date).toISOString(),
+    home_team: String(homeTeam).trim(),
+    away_team: String(awayTeam).trim(),
+    home_goals: Number(homeGoals),
+    away_goals: Number(awayGoals),
+    host_team: raw.host_team ?? null,
+  };
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(",").map(h => h.trim());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = line.split(",");
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = vals[i]; });
+    return obj;
+  });
+}
+
+function ingestData(rawArray, sourceLabel) {
+  let added = 0, skipped = 0;
+  rawArray.forEach(raw => {
+    const m = normalizeMatch(raw);
+    if (m) { state.matches.push(m); added++; } else { skipped++; }
+  });
+  saveMatches();
+  refitModels();
+  populateTeamSelects();
+  renderDataScreen();
+  showToast(`Added ${added} matches${skipped ? `, skipped ${skipped}` : ""} from ${sourceLabel}`);
+}
+
+document.getElementById("fileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      let data;
+      if (file.name.endsWith(".csv")) {
+        data = parseCSV(evt.target.result);
+      } else {
+        data = JSON.parse(evt.target.result);
+      }
+      if (!Array.isArray(data)) throw new Error("Expected an array of matches");
+      ingestData(data, file.name);
+    } catch (err) {
+      showToast("Couldn't read that file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+
+document.getElementById("pasteBtn").addEventListener("click", () => {
+  const raw = document.getElementById("pasteData").value.trim();
+  if (!raw) { showToast("Paste some JSON first"); return; }
+  try {
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) throw new Error("Expected an array");
+    ingestData(data, "pasted data");
+    document.getElementById("pasteData").value = "";
+  } catch (err) {
+    showToast("Invalid JSON: " + err.message);
+  }
+});
+
+document.getElementById("sampleBtn").addEventListener("click", () => {
+  ingestData(SAMPLE_MATCHES, "sample data");
+});
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+  if (!confirm("Remove all imported match data from this phone? This can't be undone.")) return;
+  state.matches = [];
+  saveMatches();
+  refitModels();
+  populateTeamSelects();
+  renderDataScreen();
+  showToast("All data cleared");
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  state.teamA = null; state.teamB = null; state.hostNation = null; state.whyOpen = false;
+  populateTeamSelects();
+  showToast("Selections reset");
+});
+
+/* ---------------- Tab navigation ---------------- */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("screen-" + btn.dataset.screen).classList.add("active");
+    if (btn.dataset.screen === "data") renderDataScreen();
+  });
+});
+
+document.getElementById("teamA").addEventListener("change", (e) => {
+  state.teamA = e.target.value;
+  if (state.teamA === state.teamB) {
+    const teams = getAllTeams();
+    state.teamB = teams.find(t => t !== state.teamA) || state.teamB;
+    document.getElementById("teamB").value = state.teamB;
+  }
+  renderHostChips();
+  renderDossier();
+});
+document.getElementById("teamB").addEventListener("change", (e) => {
+  state.teamB = e.target.value;
+  if (state.teamB === state.teamA) {
+    const teams = getAllTeams();
+    state.teamA = teams.find(t => t !== state.teamB) || state.teamA;
+    document.getElementById("teamA").value = state.teamA;
+  }
+  renderHostChips();
+  renderDossier();
+});
+
+/* ============================================================
+   LIVE MATCH MODULE
+   The only part of this app that makes network requests. Polls
+   football-data.org's free World Cup endpoint for match status and
+   score, then runs a remaining-time-rescaled Poisson model to turn
+   the pre-match prediction into a live win probability.
+   ============================================================ */
+
+const LIVE_API_KEY_STORAGE = "dossier_live_apikey_v1";
+const LIVE_POLL_INTERVAL_MS = 65000; // ~once/minute, respects free-tier rate limit
+const WC_COMPETITION_CODE = "WC";
+
+const liveState = {
+  apiKey: null,
+  matches: [],       // raw matches from the API, status LIVE or TIMED today
+  selectedMatchId: null,
+  pollTimer: null,
+  manualMinuteOverride: null, // {matchId, minute} if user nudges the estimate
+  lastFetchError: null,
+};
+
+function loadApiKey() {
+  liveState.apiKey = localStorage.getItem(LIVE_API_KEY_STORAGE) || null;
+}
+function saveApiKey(key) {
+  liveState.apiKey = key;
+  localStorage.setItem(LIVE_API_KEY_STORAGE, key);
+}
+
+/* ---- Remaining-time-rescaled live win probability ----
+   Mirrors the prototype: pre-match goal-rate lambdas are scaled down
+   proportionally to time remaining, then combined additively with the
+   current score via a Poisson scoreline matrix over ONLY the additional
+   goals left to be scored. See conversation history for the sanity
+   checks this passed (leads becoming safer over time, draws dominating
+   late 0-0s, etc). -------------------------------------------------*/
+function liveWinProbability(lambdaHome, lambdaAway, homeGoals, awayGoals, minutesElapsed, totalMinutes = 90) {
+  const minutesRemaining = Math.max(totalMinutes - minutesElapsed, 0);
+  const fractionRemaining = minutesRemaining / totalMinutes;
+
+  const remLambdaHome = lambdaHome * fractionRemaining;
+  const remLambdaAway = lambdaAway * fractionRemaining;
+
+  const maxAdd = 8;
+  let pHome = 0, pDraw = 0, pAway = 0;
+  for (let addH = 0; addH <= maxAdd; addH++) {
+    const pAddH = GoalRateModel._poissonPmf(addH, Math.max(remLambdaHome, 1e-6));
+    for (let addA = 0; addA <= maxAdd; addA++) {
+      const pAddA = GoalRateModel._poissonPmf(addA, Math.max(remLambdaAway, 1e-6));
+      const fh = homeGoals + addH, fa = awayGoals + addA;
+      const p = pAddH * pAddA;
+      if (fh > fa) pHome += p; else if (fh === fa) pDraw += p; else pAway += p;
+    }
+  }
+  const total = pHome + pDraw + pAway || 1;
+  return [pHome / total, pDraw / total, pAway / total];
+}
+
+/* Derives pre-match expected goals (lambdas) for two teams the same way
+   the dossier prediction does, so the live model is consistent with the
+   pre-match one rather than a separate, disconnected calculation. */
+function preMatchLambdas(teamA, teamB, hostNation) {
+  let homeAdv = NEUTRAL_HOME_ADVANTAGE;
+  let a = teamA, b = teamB;
+  if (hostNation === teamA) homeAdv = HOST_HOME_ADVANTAGE;
+  else if (hostNation === teamB) { homeAdv = HOST_HOME_ADVANTAGE; a = teamB; b = teamA; }
+
+  if (!state.goalModel.fitted) return [1.4, 1.1]; // generic fallback if no data imported
+  const [lh, la] = state.goalModel.lambdas(a, b);
+  return (a === teamA) ? [lh, la] : [la, lh];
+}
+
+/* ---- football-data.org client ---- */
+async function fetchLiveMatches() {
+  if (!liveState.apiKey) return;
+  try {
+    const resp = await fetch(
+      `https://api.football-data.org/v4/competitions/${WC_COMPETITION_CODE}/matches?status=LIVE`,
+      { headers: { "X-Auth-Token": liveState.apiKey } }
+    );
+    if (!resp.ok) {
+      if (resp.status === 403) throw new Error("Key rejected — check it's correct and active");
+      if (resp.status === 429) throw new Error("Rate limited — free tier allows 10 requests/minute");
+      throw new Error(`Request failed (${resp.status})`);
+    }
+    const data = await resp.json();
+    const rawMatches = data.matches || [];
+
+    // Defensive filtering: only keep matches that actually have the shape
+    // the rest of the app expects. A single malformed entry from the API
+    // (an unexpected field name, a null team, a missing score node) used
+    // to be able to throw deep inside the render path and blank the whole
+    // screen with no visible error -- this keeps a bad entry from taking
+    // down everything else.
+    liveState.matches = rawMatches.filter(m =>
+      m && m.id != null
+      && m.homeTeam && typeof m.homeTeam.name === "string"
+      && m.awayTeam && typeof m.awayTeam.name === "string"
+      && m.score && m.score.fullTime
+    );
+
+    const droppedCount = rawMatches.length - liveState.matches.length;
+    liveState.lastFetchError = null;
+    liveState.lastFetchWarning = droppedCount > 0
+      ? `${droppedCount} match${droppedCount===1?'':'es'} returned in an unexpected format and were skipped.`
+      : null;
+  } catch (err) {
+    liveState.lastFetchError = err.message;
+    if (err.message.includes("Failed to fetch")) {
+      liveState.lastFetchError = "Couldn't reach football-data.org — check your connection";
+    }
+  }
+  renderLiveScreen();
+}
+
+function estimateMinute(match) {
+  // Prefer the API's own minute field when present; otherwise estimate
+  // from kickoff wall-clock time. Always labeled in the UI as estimated
+  // unless it came straight from the API.
+  if (typeof match.minute === "number" && match.minute > 0) {
+    return { minute: match.minute, isEstimated: false };
+  }
+  const kickoff = new Date(match.utcDate).getTime();
+  const now = Date.now();
+  const elapsedMin = Math.floor((now - kickoff) / 60000);
+  // Clamp: can't be negative, cap at 120 for normal display (ET handled separately)
+  const clamped = Math.max(0, Math.min(elapsedMin, 120));
+  return { minute: clamped, isEstimated: true };
+}
+
+/* Scans every currently-live match and returns the one with the highest
+   confidence score -- not just the highest raw probability, since a
+   lopsided probability backed by thin data or disagreeing models isn't
+   actually the "strongest" read once that context is accounted for. */
+function findStrongestLiveRead() {
+  if (liveState.matches.length === 0) return null;
+  const analyzed = liveState.matches.map(m => analyzeLiveMatch(m));
+  analyzed.sort((a, b) => b.analysis.overallConfidence - a.analysis.overallConfidence);
+  return analyzed[0];
+}
+
+function renderStrongestReadCard() {
+  const container = document.getElementById("strongestReadContainer");
+  const strongest = findStrongestLiveRead();
+
+  if (!strongest) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const { homeName, awayName, minute, pHome, pDraw, pAway, analysis } = strongest;
+  const minutesRemaining = Math.max(90 - minute, 0);
+
+  container.innerHTML = `
+    <div class="strongest-read-card" id="strongestReadCard">
+      <div class="strongest-read-eyebrow">Strongest live read right now</div>
+      <div class="strongest-read-match">${homeName} vs ${awayName}</div>
+      <div class="strongest-read-line">
+        ${minute}' · ${strongest.homeGoals}–${strongest.awayGoals} ·
+        ${minutesRemaining} min remaining
+      </div>
+      <div class="strongest-read-pct tnum">
+        ${pct(analysis.favoredPct)}
+        <span class="label">${analysis.favoredTeam} to win &nbsp;·&nbsp; confidence ${analysis.overallConfidence}/100</span>
+      </div>
+      <div class="strongest-read-tap">View full reasoning ›</div>
+    </div>
+  `;
+
+  document.getElementById("strongestReadCard").addEventListener("click", () => {
+    liveState.selectedMatchId = strongest.match.id;
+    renderLiveScreen();
+  });
+}
+
+function renderLiveScreen() {
+  const apiKeyCard = document.getElementById("apiKeyCard");
+  const listEl = document.getElementById("liveMatchList");
+  const detailEl = document.getElementById("liveDetail");
+  const strongestContainer = document.getElementById("strongestReadContainer");
+
+  if (!liveState.apiKey) {
+    apiKeyCard.style.display = "block";
+    listEl.innerHTML = "";
+    strongestContainer.innerHTML = "";
+    detailEl.style.display = "none";
+    return;
+  }
+  apiKeyCard.style.display = "none";
+
+  if (liveState.selectedMatchId) {
+    listEl.style.display = "none";
+    strongestContainer.style.display = "none";
+    detailEl.style.display = "block";
+    try {
+      renderLiveDetail();
+    } catch (err) {
+      detailEl.innerHTML = `
+        <button class="live-detail-back" id="liveBackBtn">‹ All live matches</button>
+        <div class="live-empty">
+          <div class="big">Couldn't display this match</div>
+          <div>Something about this match's data wasn't in the expected
+          format. Tap below to go back. (${err.message})</div>
+        </div>`;
+      document.getElementById("liveBackBtn")?.addEventListener("click", () => {
+        liveState.selectedMatchId = null;
+        renderLiveScreen();
+      });
+    }
+    return;
+  }
+  listEl.style.display = "block";
+  strongestContainer.style.display = "block";
+  detailEl.style.display = "none";
+
+  if (liveState.lastFetchError) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">Couldn't load live scores</div>
+        <div>${liveState.lastFetchError}</div>
+      </div>`;
+    strongestContainer.innerHTML = "";
+    return;
+  }
+
+  if (liveState.matches.length === 0) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">No live World Cup matches right now</div>
+        <div>This checks automatically about once a minute while you have
+        the Live tab open. Come back when a match kicks off.</div>
+      </div>`;
+    strongestContainer.innerHTML = "";
+    return;
+  }
+
+  // Everything below this point reads from real API data and does real
+  // computation (Elo/Poisson lookups, confidence scoring) -- wrapped so
+  // any unexpected data shape degrades to a visible message instead of
+  // leaving the screen blank with no clue why.
+  try {
+    renderStrongestReadCard();
+
+    const warningHTML = liveState.lastFetchWarning
+      ? `<div class="caveat-box" style="margin:0 0 12px;">${liveState.lastFetchWarning}</div>`
+      : "";
+
+    listEl.innerHTML = warningHTML + liveState.matches.map(m => {
+      const { minute } = estimateMinute(m);
+      return `
+        <div class="live-match-card" data-match-id="${m.id}">
+          <div class="live-match-top">
+            <div class="live-pill"><span class="dot"></span>Live · ${minute}'</div>
+          </div>
+          <div class="live-match-teams">${m.homeTeam.name} vs ${m.awayTeam.name}</div>
+          <div class="live-match-score tnum">
+            <span>${m.score.fullTime.home ?? 0}</span><span>–</span><span>${m.score.fullTime.away ?? 0}</span>
+          </div>
+          <div class="live-match-meta">Tap for live win probability</div>
+        </div>`;
+    }).join("");
+
+    listEl.querySelectorAll(".live-match-card").forEach(card => {
+      card.addEventListener("click", () => {
+        liveState.selectedMatchId = card.dataset.matchId;
+        renderLiveScreen();
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">Something went wrong showing live matches</div>
+        <div>${err.message}. This has been kept from blanking the whole
+        screen — try reopening the Live tab, and if it keeps happening,
+        the API may have changed its response format.</div>
+      </div>`;
+    strongestContainer.innerHTML = "";
+  }
+}
+
+/* Shared by renderLiveDetail() and the strongest-read scanner so both use
+   identical logic -- analyzes one live match and returns everything
+   needed to render it (probabilities, team-name matching, reasoning). */
+function analyzeLiveMatch(match) {
+  const homeName = match.homeTeam.name;
+  const awayName = match.awayTeam.name;
+  const homeGoals = match.score.fullTime.home ?? 0;
+  const awayGoals = match.score.fullTime.away ?? 0;
+
+  let { minute, isEstimated } = estimateMinute(match);
+  if (liveState.manualMinuteOverride && liveState.manualMinuteOverride.matchId === match.id) {
+    minute = liveState.manualMinuteOverride.minute;
+  }
+
+  const allTeams = getAllTeams();
+  const matchedHome = allTeams.find(t => t === homeName) || allTeams.find(t => homeName.includes(t) || t.includes(homeName));
+  const matchedAway = allTeams.find(t => t === awayName) || allTeams.find(t => awayName.includes(t) || t.includes(awayName));
+
+  let lambdaHome = 1.4, lambdaAway = 1.1;
+  let dataMatched = false;
+  let hostNation = null;
+  if (matchedHome && matchedAway) {
+    hostNation = WORLD_CUP_2026_HOSTS.has(matchedHome) ? matchedHome
+      : (WORLD_CUP_2026_HOSTS.has(matchedAway) ? matchedAway : null);
+    [lambdaHome, lambdaAway] = preMatchLambdas(matchedHome, matchedAway, hostNation);
+    dataMatched = true;
+  }
+
+  // Pre-match-only Elo split, used purely as a "does the rating model
+  // agree with the live read" signal in the reasoning panel. Elo doesn't
+  // have a natural way to rescale for time-elapsed the way goal rates do,
+  // so we use its pre-match view as-is rather than inventing a fake
+  // in-game Elo adjustment.
+  const [eH, eD, eA] = matchedHome && matchedAway
+    ? state.elo.expectedOutcomeProbs(
+        hostNation === matchedAway ? matchedAway : matchedHome,
+        hostNation === matchedAway ? matchedHome : matchedAway,
+        hostNation ? HOST_HOME_ADVANTAGE : NEUTRAL_HOME_ADVANTAGE
+      )
+    : [0.45, 0.27, 0.28];
+
+  const [pHome, pDraw, pAway] = liveWinProbability(lambdaHome, lambdaAway, homeGoals, awayGoals, minute);
+
+  const analysis = computeMatchAnalysis({
+    teamA: homeName, teamB: awayName,
+    pA: pHome, pDraw, pB: pAway,
+    eloA: eH, eloDraw: eD, eloB: eA,
+    poisA: pHome, poisDraw: pDraw, poisB: pAway, // goal-rate IS the live model here
+    matchCountA: matchedHome ? matchCountFor(matchedHome) : 0,
+    matchCountB: matchedAway ? matchCountFor(matchedAway) : 0,
+    isLive: true, minute, hostNation,
+  });
+
+  return {
+    match, homeName, awayName, homeGoals, awayGoals, minute, isEstimated,
+    pHome, pDraw, pAway, dataMatched, analysis,
+  };
+}
+
+function renderLiveDetail() {
+  const detailEl = document.getElementById("liveDetail");
+  const match = liveState.matches.find(m => String(m.id) === String(liveState.selectedMatchId));
+
+  if (!match) {
+    liveState.selectedMatchId = null;
+    renderLiveScreen();
+    return;
+  }
+
+  const a = analyzeLiveMatch(match);
+  const { homeName, awayName, homeGoals, awayGoals, minute, isEstimated, pHome, pDraw, pAway, dataMatched, analysis } = a;
+
+  const barFillPct = pHome * 100;
+  const drawCenterPct = pHome * 100 + (pDraw * 100) / 2;
+  const favoredName = pHome >= pAway ? homeName : awayName;
+  const favoredPct = Math.max(pHome, pAway);
+
+  detailEl.innerHTML = `
+    <button class="live-detail-back" id="liveBackBtn">‹ All live matches</button>
+
+    <div class="live-minute-badge ${isEstimated ? 'estimated' : ''}">
+      <span class="live-pill"><span class="dot"></span></span>
+      ${minute}' &nbsp;·&nbsp; ${homeGoals}–${awayGoals}
+    </div>
+
+    ${!dataMatched ? `
+      <div class="caveat-box" style="margin-top:10px;">
+        Couldn't match these team names to your imported data, so this is
+        using generic average expected-goals instead of these teams'
+        actual ratings. Predictions will be less specific until you
+        import data with matching team names.
+      </div>` : ''}
+
+    <div class="matchup-names" style="margin-top:18px;">
+      <div class="team-name">${homeName}</div>
+      <div class="team-name right">${awayName}</div>
+    </div>
+
+    <div class="tugbar-wrap">
+      <div class="tugbar">
+        <div class="tugbar-fill" style="width:${barFillPct}%"></div>
+        <div class="tugbar-draw-notch" style="left:calc(${drawCenterPct}% - 1.5px)"></div>
+      </div>
+      <div class="tugbar-labels">
+        <span class="pct home-pct tnum">${pct(pHome)}</span>
+        <span class="pct away-pct tnum">${pct(pAway)}</span>
+      </div>
+      <div class="tugbar-draw-label">Draw ${pct(pDraw)}</div>
+    </div>
+
+    <div class="verdict">
+      <div class="verdict-label">Live read</div>
+      <div class="verdict-text">
+        <b>${favoredName}</b> favored at ${pct(favoredPct)} to win from here,
+        with ${Math.max(90 - minute, 0)} minutes of regulation remaining.
+      </div>
+    </div>
+
+    ${isEstimated ? `
+      <div class="minute-adjust-row">
+        <span style="font-size:13px; color:var(--ink-soft);">Adjust minute (stoppage time, etc.)</span>
+        <button class="minute-adjust-btn" id="minuteDown">–</button>
+        <span class="tnum" style="font-family:var(--mono); min-width:28px; text-align:center;">${minute}</span>
+        <button class="minute-adjust-btn" id="minuteUp">+</button>
+      </div>` : ''}
+
+    ${renderReasoningHTML(analysis)}
+
+    <div class="caveat-box">
+      <b>Read before you act on this.</b> This estimate updates score and
+      minute roughly once a minute, not instantly. Squad changes (red
+      cards, injuries) aren't factored in beyond what's reflected in the
+      score itself. Treat this as a rough live read, not a precise number.
+    </div>
+  `;
+
+  document.getElementById("liveBackBtn").addEventListener("click", () => {
+    liveState.selectedMatchId = null;
+    liveState.manualMinuteOverride = null;
+    renderLiveScreen();
+  });
+
+  if (isEstimated) {
+    document.getElementById("minuteUp")?.addEventListener("click", () => {
+      liveState.manualMinuteOverride = { matchId: match.id, minute: minute + 1 };
+      renderLiveDetail();
+    });
+    document.getElementById("minuteDown")?.addEventListener("click", () => {
+      liveState.manualMinuteOverride = { matchId: match.id, minute: Math.max(0, minute - 1) };
+      renderLiveDetail();
+    });
+  }
+}
+
+function startLivePolling() {
+  if (liveState.pollTimer) clearInterval(liveState.pollTimer);
+  if (!liveState.apiKey) return;
+  fetchLiveMatches();
+  liveState.pollTimer = setInterval(fetchLiveMatches, LIVE_POLL_INTERVAL_MS);
+}
+function stopLivePolling() {
+  if (liveState.pollTimer) clearInterval(liveState.pollTimer);
+  liveState.pollTimer = null;
+}
+
+document.getElementById("saveApiKeyBtn").addEventListener("click", () => {
+  const key = document.getElementById("apiKeyInput").value.trim();
+  if (!key) { showToast("Paste a key first"); return; }
+  saveApiKey(key);
+  document.getElementById("apiKeyInput").value = "";
+  showToast("Key saved — checking for live matches");
+  startLivePolling();
+});
+
+/* Poll live scores while the Live tab is visible, and poll for Vega
+   (scan + settlement check) while the Vega tab is visible -- this keeps
+   network use tied to what's actually on screen, respecting the free
+   tier's rate limit. If Vega is toggled on, her watch continues even
+   when you're on the Live tab (sharing that tab's poll cycle), but not
+   while on Data/Match/About, to avoid two timers double-polling. */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.screen === "live") {
+      startLivePolling();
+      if (vegaState.enabled) startVegaPolling(); else stopVegaPolling();
+    } else if (btn.dataset.screen === "vega") {
+      stopLivePolling();
+      renderVegaScreen();
+      if (vegaState.enabled) startVegaPolling(); else stopVegaPolling();
+    } else {
+      stopLivePolling();
+      stopVegaPolling();
+    }
+  });
+});
+
+/* ============================================================
+   VEGA — paper-trading companion
+   Entirely fictional money. Auto-logs a paper "bet" whenever a live
+   match's confidence score (from the existing analyzeLiveMatch /
+   computeMatchAnalysis pipeline) crosses a user-set threshold, then
+   settles it automatically once that match finishes. No real betting
+   integration of any kind exists anywhere in this code.
+   ============================================================ */
+
+const VEGA_STORAGE_KEY = "dossier_vega_v1";
+const VEGA_BASE_UNIT = 10;
+const VEGA_STARTING_BANKROLL = 1000;
+const VEGA_POLL_INTERVAL_MS = 70000; // slightly offset from live poll to spread requests
+
+const vegaState = {
+  bankroll: VEGA_STARTING_BANKROLL,
+  enabled: false,
+  threshold: 65,
+  picks: [],        // {id, matchId, homeName, awayName, favoredTeam, isHomeFavored,
+                     //  confidence, favoredPct, stake, status, note, loggedAt, settledAt, settleNote}
+  pollTimer: null,
+};
+
+function loadVegaState() {
+  try {
+    const raw = localStorage.getItem(VEGA_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      Object.assign(vegaState, parsed);
+    }
+  } catch (e) { /* keep defaults */ }
+}
+function saveVegaState() {
+  try {
+    localStorage.setItem(VEGA_STORAGE_KEY, JSON.stringify({
+      bankroll: vegaState.bankroll, enabled: vegaState.enabled,
+      threshold: vegaState.threshold, picks: vegaState.picks,
+    }));
+  } catch (e) { /* storage full or unavailable, fail silently */ }
+}
+
+function vegaStakeForConfidence(confidence, bankroll, baseUnit = VEGA_BASE_UNIT) {
+  const scaleFactor = 1 + Math.max(0, (confidence - vegaState.threshold)) / 35 * 3;
+  const rawStake = baseUnit * Math.max(1, scaleFactor);
+  const maxStake = bankroll * 0.15;
+  return Math.max(1, Math.round(Math.min(rawStake, maxStake)));
+}
+
+function vegaCaseNote({ favoredTeam, opponentTeam, confidence, isLive, minute, reasons }) {
+  const hasModelDisagreement = reasons.some(r => r.text.includes("disagree meaningfully"));
+  const hasThinData = reasons.some(r => r.text.includes("Thin data"));
+  const hasLateGame = isLive && minute != null && minute >= 80;
+
+  let opening;
+  if (confidence >= 85) opening = `${favoredTeam}. Not close. Filing this one with confidence.`;
+  else if (confidence >= 70) opening = `${favoredTeam} reads clean here. Taking the position.`;
+  else opening = `${favoredTeam}, but barely clears the line. Logging it — the threshold's the threshold.`;
+
+  let detail;
+  if (hasLateGame) {
+    const minLeft = Math.max(90 - minute, 0);
+    detail = `Clock's against ${opponentTeam} now. ${minLeft} minute${minLeft===1?'':'s'} left to find an answer they probably don't have.`;
+  } else if (hasModelDisagreement) {
+    detail = `The two models don't fully agree on this one. Going with it, but keeping the stake modest.`;
+  } else if (hasThinData) {
+    detail = `Thin file on one side of this match. Case stands, but it's a lighter wager than the percentage alone suggests.`;
+  } else {
+    detail = `Rating and scoring models both point the same way. That's usually enough.`;
+  }
+  return `${opening} ${detail}`;
+}
+
+function vegaSettleNote(favoredTeam, won, isPush) {
+  if (isPush) return `Push. Ended level on the wrong market. No harm done.`;
+  if (won) {
+    const lines = [
+      `Called it. ${favoredTeam} delivers.`,
+      `Case closed. ${favoredTeam} did exactly what the file said.`,
+      `As filed. On to the next one.`,
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  const lines = [
+    `Wrong. ${favoredTeam} didn't show up. Noted for the record.`,
+    `Missed this one. The data said one thing, the pitch said another.`,
+    `That's a loss. Adjusting nothing — one match doesn't break a model.`,
+  ];
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+/* Scans current live matches and logs a new pick for any match whose
+   confidence crosses the threshold and that Vega hasn't already picked. */
+function vegaScanAndLog() {
+  if (!vegaState.enabled || !liveState.apiKey) return;
+
+  liveState.matches.forEach(m => {
+    const alreadyPicked = vegaState.picks.some(p => p.matchId === String(m.id));
+    if (alreadyPicked) return;
+
+    const a = analyzeLiveMatch(m);
+    if (a.analysis.overallConfidence < vegaState.threshold) return;
+
+    const isHomeFavored = a.pHome >= a.pAway;
+    const favoredTeam = isHomeFavored ? a.homeName : a.awayName;
+    const opponentTeam = isHomeFavored ? a.awayName : a.homeName;
+    const stake = vegaStakeForConfidence(a.analysis.overallConfidence, vegaState.bankroll);
+
+    if (stake > vegaState.bankroll) return; // out of paper money, skip silently
+
+    const note = vegaCaseNote({
+      favoredTeam, opponentTeam,
+      confidence: a.analysis.overallConfidence,
+      isLive: true, minute: a.minute,
+      reasons: a.analysis.reasons,
+    });
+
+    vegaState.picks.unshift({
+      id: `${m.id}-${Date.now()}`,
+      matchId: String(m.id),
+      homeName: a.homeName, awayName: a.awayName,
+      favoredTeam, isHomeFavored,
+      confidence: a.analysis.overallConfidence,
+      favoredPct: a.analysis.favoredPct,
+      stake,
+      status: "pending", // pending | won | lost | push
+      note,
+      loggedAt: new Date().toISOString(),
+      settledAt: null,
+      settleNote: null,
+    });
+
+    vegaState.bankroll -= stake; // stake is "at risk" while pending
+  });
+
+  saveVegaState();
+}
+
+/* Checks every pending pick's match status; settles (wins/losses/push)
+   any that have finished. Fetches each match by ID directly since the
+   LIVE filter used elsewhere won't return finished matches. */
+async function vegaCheckSettlements() {
+  if (!liveState.apiKey) return;
+  const pending = vegaState.picks.filter(p => p.status === "pending");
+  if (pending.length === 0) return;
+
+  for (const pick of pending) {
+    try {
+      const resp = await fetch(`https://api.football-data.org/v4/matches/${pick.matchId}`, {
+        headers: { "X-Auth-Token": liveState.apiKey },
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data.status !== "FINISHED") continue;
+
+      const homeGoals = data.score.fullTime.home;
+      const awayGoals = data.score.fullTime.away;
+      const homeWon = homeGoals > awayGoals;
+      const awayWon = awayGoals > homeGoals;
+      const wasDraw = homeGoals === awayGoals;
+
+      let won = false, isPush = false;
+      if (wasDraw) {
+        isPush = false; // Vega only picks a team to win, never the draw itself
+        won = false;
+      } else {
+        won = (pick.isHomeFavored && homeWon) || (!pick.isHomeFavored && awayWon);
+      }
+
+      pick.status = wasDraw ? "lost" : (won ? "won" : "lost");
+      // payout: stake already deducted at pick time; winning returns 1.9x stake
+      // (a simple, transparent fictional payout multiplier -- not tied to any
+      // real sportsbook's actual odds, since Vega isn't betting against real lines)
+      if (pick.status === "won") {
+        vegaState.bankroll += Math.round(pick.stake * 1.9);
+      }
+      pick.settledAt = new Date().toISOString();
+      pick.settleNote = vegaSettleNote(pick.favoredTeam, pick.status === "won", false);
+    } catch (e) { /* skip, try again next poll */ }
+  }
+  saveVegaState();
+  if (document.getElementById("screen-vega")?.classList.contains("active")) renderVegaScreen();
+}
+
+function vegaRecord() {
+  const won = vegaState.picks.filter(p => p.status === "won").length;
+  const lost = vegaState.picks.filter(p => p.status === "lost").length;
+  const pending = vegaState.picks.filter(p => p.status === "pending").length;
+  return { won, lost, pending };
+}
+
+function renderVegaScreen() {
+  const bankrollEl = document.getElementById("vegaBankroll");
+  const recordEl = document.getElementById("vegaRecord");
+  const toggleEl = document.getElementById("vegaToggle");
+  const thresholdEl = document.getElementById("vegaThreshold");
+  const thresholdValEl = document.getElementById("vegaThresholdValue");
+  const listEl = document.getElementById("vegaLedgerList");
+
+  bankrollEl.textContent = `$${vegaState.bankroll.toLocaleString()}`;
+
+  const { won, lost, pending } = vegaRecord();
+  const net = vegaState.bankroll - VEGA_STARTING_BANKROLL;
+  recordEl.innerHTML = `${won}–${lost}–${pending}<span class="sub">W–L–Open</span>`;
+  recordEl.className = "vega-record" + (net > 0 ? " positive" : (net < 0 ? " negative" : ""));
+
+  toggleEl.classList.toggle("on", vegaState.enabled);
+  thresholdEl.value = vegaState.threshold;
+  thresholdValEl.textContent = vegaState.threshold;
+
+  if (vegaState.picks.length === 0) {
+    listEl.innerHTML = `
+      <div class="vega-empty">
+        <div class="big">No cases yet</div>
+        <div>Turn Vega on above. She'll start logging picks automatically
+        once a live match crosses your confidence threshold.</div>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = vegaState.picks.map(p => {
+    const statusLabel = { pending: "Open", won: "Won", lost: "Lost", push: "Push" }[p.status];
+    const noteToShow = p.status === "pending" ? p.note : `${p.note} — ${p.settleNote}`;
+    return `
+      <div class="vega-pick-card">
+        <div class="vega-pick-top">
+          <div class="vega-pick-match">${p.homeName} vs ${p.awayName}</div>
+          <div class="vega-pick-status ${p.status}">${statusLabel}</div>
+        </div>
+        <div class="vega-pick-note">"${noteToShow}"</div>
+        <div class="vega-pick-meta">
+          <span>${p.favoredTeam} · ${pct(p.favoredPct)} · conf ${p.confidence}</span>
+          <span class="tnum">$${p.stake} staked</span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function startVegaPolling() {
+  if (vegaState.pollTimer) clearInterval(vegaState.pollTimer);
+  if (!liveState.apiKey) return;
+  vegaScanAndLog();
+  vegaCheckSettlements();
+  renderVegaScreen();
+  vegaState.pollTimer = setInterval(() => {
+    vegaScanAndLog();
+    vegaCheckSettlements();
+    if (document.getElementById("screen-vega")?.classList.contains("active")) renderVegaScreen();
+  }, VEGA_POLL_INTERVAL_MS);
+}
+function stopVegaPolling() {
+  if (vegaState.pollTimer) clearInterval(vegaState.pollTimer);
+  vegaState.pollTimer = null;
+}
+
+document.getElementById("vegaToggle").addEventListener("click", () => {
+  vegaState.enabled = !vegaState.enabled;
+  saveVegaState();
+  renderVegaScreen();
+  if (vegaState.enabled) {
+    if (!liveState.apiKey) {
+      showToast("Connect live scores on the Live tab first");
+      vegaState.enabled = false;
+      saveVegaState();
+      renderVegaScreen();
+      return;
+    }
+    showToast("Vega is watching");
+    startVegaPolling();
+  } else {
+    showToast("Vega is off");
+    stopVegaPolling();
+  }
+});
+
+document.getElementById("vegaThreshold").addEventListener("input", (e) => {
+  vegaState.threshold = parseInt(e.target.value, 10);
+  document.getElementById("vegaThresholdValue").textContent = vegaState.threshold;
+  saveVegaState();
+});
+
+document.getElementById("vegaResetBtn").addEventListener("click", () => {
+  if (!confirm("Reset Vega's paper bankroll back to $1,000 and clear the case file? This can't be undone.")) return;
+  vegaState.bankroll = VEGA_STARTING_BANKROLL;
+  vegaState.picks = [];
+  saveVegaState();
+  renderVegaScreen();
+  showToast("Vega's bankroll reset to $1,000");
+});
+
+/* ============================================================
+   ADD TO HOME SCREEN PROMPT
+   iOS Safari has no programmatic install API (unlike Chrome/Android),
+   so this can only ever show instructions for the manual Share-sheet
+   flow -- there is no button that installs the app automatically.
+   ============================================================ */
+
+const INSTALL_DISMISS_KEY = "dossier_install_dismissed_v1";
+
+function isStandaloneDisplay() {
+  // True once the app has actually been added to the Home Screen and
+  // is running full-screen from its own icon, on iOS Safari specifically.
+  return window.navigator.standalone === true
+    || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+function isIOSSafari() {
+  const ua = window.navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && "ontouchend" in document);
+  const isSafariBrowser = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua); // exclude other iOS browsers, which can't install this way either
+  return isIOS && isSafariBrowser;
+}
+
+function initInstallBanner() {
+  const banner = document.getElementById("installBanner");
+  const dismissed = localStorage.getItem(INSTALL_DISMISS_KEY) === "1";
+
+  if (isStandaloneDisplay() || dismissed || !isIOSSafari()) {
+    banner.classList.add("hidden");
+    return;
+  }
+  banner.classList.remove("hidden");
+}
+
+function openInstallSheet() {
+  document.getElementById("installOverlay").classList.add("show");
+}
+function closeInstallSheet() {
+  document.getElementById("installOverlay").classList.remove("show");
+}
+
+document.getElementById("installBannerBtn").addEventListener("click", openInstallSheet);
+document.getElementById("installSheetClose").addEventListener("click", closeInstallSheet);
+document.getElementById("installOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "installOverlay") closeInstallSheet(); // tap outside sheet to dismiss
+});
+document.getElementById("installBannerDismiss").addEventListener("click", () => {
+  localStorage.setItem(INSTALL_DISMISS_KEY, "1");
+  document.getElementById("installBanner").classList.add("hidden");
+});
+
+/* ============================================================
+   MLB_PARK_DATA
+   Static reference data for all 30 MLB ballparks: coordinates (for
+   weather lookups), approximate home-plate-to-center-field orientation
+   in degrees (0=North, 90=East, 180=South, 270=West) for the wind
+   model, and 2025 Statcast home run park factors (100 = league average).
+
+   SOURCES & LIMITS, stated plainly:
+   - Coordinates: public stadium addresses, accurate to rooftop level.
+   - Orientation: MLB Rule 1.04 recommends home plate -> center field run
+     roughly east-northeast; most modern parks follow this loosely. Where
+     specific orientation is well-documented (e.g. Wrigley's NNE-facing
+     wind-sensitive layout), that's used. Where it isn't, ~70-80 degrees
+     (ENE) is used as a reasonable default. This is an APPROXIMATION,
+     not a surveyed value -- treat the wind-direction effect in the HR
+     model as directionally informative, not precise.
+   - Park factors: 2025 season Statcast HR park factors (100=average),
+     compiled from Baseball Savant / ESPN / Yahoo Sports park factor
+     coverage. These shift year to year (weather patterns, rule changes
+     like Kauffman's 2026 fence move) -- revisit periodically.
+   ============================================================ */
+
+const MLB_PARKS = {
+  // National League
+  113: { name: "Great American Ball Park", team: "Cincinnati Reds", lat: 39.0975, lon: -84.5070, orientation: 80, hrFactor: 121 },
+  119: { name: "Dodger Stadium", team: "Los Angeles Dodgers", lat: 34.0739, lon: -118.2400, orientation: 25, hrFactor: 104 },
+  121: { name: "Citi Field", team: "New York Mets", lat: 40.7571, lon: -73.8458, orientation: 30, hrFactor: 96 },
+  133: { name: "Sutter Health Park", team: "Athletics", lat: 38.5802, lon: -121.5142, orientation: 30, hrFactor: 124 },
+  112: { name: "Wrigley Field", team: "Chicago Cubs", lat: 41.9484, lon: -87.6553, orientation: 30, hrFactor: 103 },
+  134: { name: "PNC Park", team: "Pittsburgh Pirates", lat: 40.4469, lon: -80.0057, orientation: 65, hrFactor: 66 },
+  135: { name: "Petco Park", team: "San Diego Padres", lat: 32.7073, lon: -117.1566, orientation: 30, hrFactor: 97 },
+  137: { name: "Oracle Park", team: "San Francisco Giants", lat: 37.7786, lon: -122.3893, orientation: 95, hrFactor: 85 },
+  138: { name: "Busch Stadium", team: "St. Louis Cardinals", lat: 38.6226, lon: -90.1928, orientation: 50, hrFactor: 77 },
+  144: { name: "Truist Park", team: "Atlanta Braves", lat: 33.8908, lon: -84.4678, orientation: 75, hrFactor: 98 },
+  146: { name: "loanDepot park", team: "Miami Marlins", lat: 25.7781, lon: -80.2197, orientation: 140, hrFactor: 108 },
+  158: { name: "American Family Field", team: "Milwaukee Brewers", lat: 43.0280, lon: -87.9712, orientation: 65, hrFactor: 95 },
+  120: { name: "Nationals Park", team: "Washington Nationals", lat: 38.8730, lon: -77.0074, orientation: 35, hrFactor: 99 },
+  143: { name: "Citizens Bank Park", team: "Philadelphia Phillies", lat: 39.9061, lon: -75.1665, orientation: 5, hrFactor: 113 },
+  109: { name: "Chase Field", team: "Arizona Diamondbacks", lat: 33.4455, lon: -112.0667, orientation: 65, hrFactor: 90 },
+  115: { name: "Coors Field", team: "Colorado Rockies", lat: 39.7559, lon: -104.9942, orientation: 15, hrFactor: 118 },
+
+  // American League
+  147: { name: "Yankee Stadium", team: "New York Yankees", lat: 40.8296, lon: -73.9262, orientation: 75, hrFactor: 112 },
+  111: { name: "Fenway Park", team: "Boston Red Sox", lat: 42.3467, lon: -71.0972, orientation: 45, hrFactor: 100 },
+  141: { name: "Rogers Centre", team: "Toronto Blue Jays", lat: 43.6414, lon: -79.3894, orientation: 75, hrFactor: 108 },
+  139: { name: "George M. Steinbrenner Field", team: "Tampa Bay Rays", lat: 27.9803, lon: -82.5332, orientation: 75, hrFactor: 102 },
+  110: { name: "Oriole Park at Camden Yards", team: "Baltimore Orioles", lat: 39.2839, lon: -76.6217, orientation: 30, hrFactor: 107 },
+  145: { name: "Rate Field", team: "Chicago White Sox", lat: 41.8299, lon: -87.6338, orientation: 140, hrFactor: 100 },
+  114: { name: "Progressive Field", team: "Cleveland Guardians", lat: 41.4962, lon: -81.6852, orientation: 5, hrFactor: 95 },
+  116: { name: "Comerica Park", team: "Detroit Tigers", lat: 42.3390, lon: -83.0485, orientation: 145, hrFactor: 96 },
+  118: { name: "Kauffman Stadium", team: "Kansas City Royals", lat: 39.0517, lon: -94.4803, orientation: 75, hrFactor: 100 },
+  142: { name: "Target Field", team: "Minnesota Twins", lat: 44.9817, lon: -93.2776, orientation: 25, hrFactor: 99 },
+  117: { name: "Daikin Park", team: "Houston Astros", lat: 29.7573, lon: -95.3555, orientation: 5, hrFactor: 100 },
+  108: { name: "Angel Stadium", team: "Los Angeles Angels", lat: 33.8003, lon: -117.8827, orientation: 15, hrFactor: 105 },
+  136: { name: "T-Mobile Park", team: "Seattle Mariners", lat: 47.5914, lon: -122.3325, orientation: 45, hrFactor: 91 },
+  140: { name: "Globe Life Field", team: "Texas Rangers", lat: 32.7472, lon: -97.0833, orientation: 38, hrFactor: 91 },
+};
+
+const LEAGUE_AVG_PARK_FACTOR = 100;
+
+/* ============================================================
+   MLB HOME RUN SUGGESTIONS
+   Pulls today's (or a chosen date's) MLB schedule with probable
+   pitchers and venue from the free MLB Stats API, fetches current
+   weather for each venue from Open-Meteo (also free, no key), and
+   ranks batters from both probable lineups by a combined power /
+   park / weather score.
+
+   HONEST LIMITS, stated in the UI too:
+   - "Who they're facing" is approximated using the opposing PROBABLE
+     PITCHER's overall HR-allowed rate, not true batter-vs-this-pitcher
+     history (platoon splits, pitch-type matchups). That granular data
+     isn't available for free.
+   - Starting lineups aren't usually official until ~2 hours before
+     first pitch, so for early lookups, this uses recent qualified
+     hitters from each team's roster rather than a confirmed lineup --
+     clearly labeled as such.
+   - Weather is current conditions at lookup time, not necessarily what
+     it'll be at first pitch -- refresh closer to game time for accuracy.
+   ============================================================ */
+
+const mlbState = {
+  selectedDate: new Date(),
+  games: [],
+  selectedGamePk: null,
+  battersCache: {},   // teamId -> [{id, name, hrRate}], cached per session
+  pitchersCache: {},  // pitcherId -> hrRateAllowed
+  weatherCache: {},   // venueId -> {tempF, windSpeedMph, windDirectionDeg, fetchedAt}
+  lastError: null,
+};
+
+function mlbDateStr(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function mlbDateLabel(date) {
+  const today = new Date();
+  const isToday = mlbDateStr(date) === mlbDateStr(today);
+  if (isToday) return "Today";
+  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+async function fetchMLBSchedule(date) {
+  const dateStr = mlbDateStr(date);
+  try {
+    const resp = await fetch(
+      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateStr}&hydrate=team,venue,probablePitcher`
+    );
+    if (!resp.ok) throw new Error(`MLB schedule request failed (${resp.status})`);
+    const data = await resp.json();
+    const dateEntry = (data.dates || [])[0];
+    const games = dateEntry ? dateEntry.games : [];
+
+    // Defensive filter, same discipline as the soccer live feed: only
+    // keep games with the shape the rest of this module expects.
+    mlbState.games = games.filter(g =>
+      g && g.gamePk != null
+      && g.teams && g.teams.home && g.teams.home.team
+      && g.teams.away && g.teams.away.team
+      && g.venue && g.venue.id != null
+    );
+    mlbState.lastError = null;
+  } catch (err) {
+    mlbState.lastError = err.message.includes("Failed to fetch")
+      ? "Couldn't reach MLB's stats API — check your connection"
+      : err.message;
+    mlbState.games = [];
+  }
+}
+
+async function fetchWeatherForVenue(venueId) {
+  const cached = mlbState.weatherCache[venueId];
+  if (cached && (Date.now() - cached.fetchedAt) < 20 * 60 * 1000) {
+    return cached; // reuse anything fetched in the last 20 minutes
+  }
+
+  const park = MLB_PARKS[venueId];
+  if (!park) return null;
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${park.lat}&longitude=${park.lon}` +
+      `&current=temperature_2m,wind_speed_10m,wind_direction_10m&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Weather request failed (${resp.status})`);
+    const data = await resp.json();
+    const current = data.current || {};
+
+    const result = {
+      tempF: current.temperature_2m ?? 70,
+      windSpeedMph: current.wind_speed_10m ?? 0,
+      windDirectionDeg: current.wind_direction_10m ?? 0,
+      fetchedAt: Date.now(),
+      ok: true,
+    };
+    mlbState.weatherCache[venueId] = result;
+    return result;
+  } catch (err) {
+    return { tempF: 70, windSpeedMph: 0, windDirectionDeg: 0, fetchedAt: Date.now(), ok: false };
+  }
+}
+
+/* Fetches a team's hitters with this-season HR rate (HR per plate
+   appearance), used as the batter power baseline. Falls back gracefully
+   if a player has too few plate appearances to be meaningful. */
+async function fetchTeamBatters(teamId) {
+  if (mlbState.battersCache[teamId]) return mlbState.battersCache[teamId];
+
+  try {
+    const rosterResp = await fetch(`https://statsapi.mlb.com/api/v1/teams/${teamId}/roster?rosterType=active`);
+    if (!rosterResp.ok) throw new Error("roster fetch failed");
+    const rosterData = await rosterResp.json();
+    const hitters = (rosterData.roster || []).filter(p =>
+      p.position && p.position.abbreviation !== "P"
+    );
+
+    // Fetch season hitting stats for each hitter. MLB Stats API supports
+    // a multi-person stats call, but to keep this simple and within
+    // reasonable request counts, we cap to the first 15 roster hitters
+    // (active rosters are ~13 position players typically, so this
+    // comfortably covers the realistic lineup pool).
+    const capped = hitters.slice(0, 15);
+    const results = await Promise.all(capped.map(async (p) => {
+      try {
+        const statResp = await fetch(
+          `https://statsapi.mlb.com/api/v1/people/${p.person.id}/stats?stats=season&group=hitting&season=${new Date().getFullYear()}`
+        );
+        if (!statResp.ok) return null;
+        const statData = await statResp.json();
+        const splits = statData.stats?.[0]?.splits;
+        const stat = splits && splits[0] ? splits[0].stat : null;
+        if (!stat || !stat.plateAppearances || stat.plateAppearances < 20) return null;
+
+        const hrRate = (stat.homeRuns || 0) / stat.plateAppearances;
+        return {
+          id: p.person.id,
+          name: p.person.fullName,
+          position: p.position.abbreviation,
+          hrRate,
+          homeRuns: stat.homeRuns || 0,
+          plateAppearances: stat.plateAppearances,
+        };
+      } catch (e) { return null; }
+    }));
+
+    const validBatters = results.filter(Boolean);
+    mlbState.battersCache[teamId] = validBatters;
+    return validBatters;
+  } catch (err) {
+    return [];
+  }
+}
+
+/* Fetches a pitcher's HR-allowed rate (HR per batter faced), used as
+   the matchup-quality proxy described in the module-level comment. */
+async function fetchPitcherHRRate(pitcherId) {
+  if (mlbState.pitchersCache[pitcherId] != null) return mlbState.pitchersCache[pitcherId];
+
+  const LEAGUE_AVG_PITCHER_HR_RATE = 0.03; // fallback if data unavailable
+  try {
+    const resp = await fetch(
+      `https://statsapi.mlb.com/api/v1/people/${pitcherId}/stats?stats=season&group=pitching&season=${new Date().getFullYear()}`
+    );
+    if (!resp.ok) throw new Error("pitcher stat fetch failed");
+    const data = await resp.json();
+    const splits = data.stats?.[0]?.splits;
+    const stat = splits && splits[0] ? splits[0].stat : null;
+    if (!stat || !stat.battersFaced || stat.battersFaced < 20) {
+      mlbState.pitchersCache[pitcherId] = LEAGUE_AVG_PITCHER_HR_RATE;
+      return LEAGUE_AVG_PITCHER_HR_RATE;
+    }
+    const rate = (stat.homeRuns || 0) / stat.battersFaced;
+    mlbState.pitchersCache[pitcherId] = rate;
+    return rate;
+  } catch (err) {
+    mlbState.pitchersCache[pitcherId] = LEAGUE_AVG_PITCHER_HR_RATE;
+    return LEAGUE_AVG_PITCHER_HR_RATE;
+  }
+}
+
+/* ---- Core scoring model (ported + tested earlier in this session) ---- */
+function mlbWindEffect(windSpeedMph, windDirectionDeg, parkOrientationDeg) {
+  const windBlowingToward = (windDirectionDeg + 180) % 360;
+  let diff = Math.abs(windBlowingToward - parkOrientationDeg);
+  if (diff > 180) diff = 360 - diff;
+  const alignment = Math.cos(diff * Math.PI / 180);
+  return alignment * (windSpeedMph / 20);
+}
+function mlbTemperatureEffect(tempF) {
+  return Math.max(-0.15, Math.min(0.25, (tempF - 70) / 10 * 0.04));
+}
+function computeHRScore(batterHRRate, pitcherHRRateAllowed, venueId, weather) {
+  const park = MLB_PARKS[venueId] || { hrFactor: LEAGUE_AVG_PARK_FACTOR, orientation: 75 };
+  const parkMultiplier = park.hrFactor / LEAGUE_AVG_PARK_FACTOR;
+
+  const wind = mlbWindEffect(weather.windSpeedMph, weather.windDirectionDeg, park.orientation);
+  const temp = mlbTemperatureEffect(weather.tempF);
+  const weatherMultiplier = 1 + wind * 0.15 + temp;
+
+  const matchupBaseRate = (batterHRRate + pitcherHRRateAllowed) / 2;
+  const finalScore = matchupBaseRate * parkMultiplier * weatherMultiplier;
+
+  return { finalScore, parkMultiplier, weatherMultiplier, windEffect: wind, tempEffect: temp };
+}
+
+/* Builds ranked suggestions for one game: fetches both teams' batters,
+   the opposing probable pitchers' HR-allowed rates, and venue weather,
+   then scores every batter against the OPPOSING pitcher (the matchup
+   that will actually happen) at that park under current conditions. */
+async function buildHRSuggestions(game) {
+  const homeTeamId = game.teams.home.team.id;
+  const awayTeamId = game.teams.away.team.id;
+  const venueId = game.venue.id;
+
+  const homePitcher = game.teams.home.probablePitcher;
+  const awayPitcher = game.teams.away.probablePitcher;
+
+  const [homeBatters, awayBatters, weather] = await Promise.all([
+    fetchTeamBatters(homeTeamId),
+    fetchTeamBatters(awayTeamId),
+    fetchWeatherForVenue(venueId),
+  ]);
+
+  const homePitcherHRRate = awayPitcher ? await fetchPitcherHRRate(awayPitcher.id) : 0.03;
+  const awayPitcherHRRate = homePitcher ? await fetchPitcherHRRate(homePitcher.id) : 0.03;
+
+  const suggestions = [];
+
+  // Home batters face the AWAY probable pitcher
+  homeBatters.forEach(b => {
+    const score = computeHRScore(b.hrRate, homePitcherHRRate, venueId, weather);
+    suggestions.push({
+      ...b, team: game.teams.home.team.name, opposingPitcher: awayPitcher?.fullName || "TBD",
+      opposingPitcherHRRate: homePitcherHRRate, ...score,
+    });
+  });
+  // Away batters face the HOME probable pitcher
+  awayBatters.forEach(b => {
+    const score = computeHRScore(b.hrRate, awayPitcherHRRate, venueId, weather);
+    suggestions.push({
+      ...b, team: game.teams.away.team.name, opposingPitcher: homePitcher?.fullName || "TBD",
+      opposingPitcherHRRate: awayPitcherHRRate, ...score,
+    });
+  });
+
+  suggestions.sort((a, b) => b.finalScore - a.finalScore);
+  return { suggestions, weather, venueId };
+}
+
+/* ---------------- UI rendering ---------------- */
+function mlbWeatherIcon(tempF) {
+  if (tempF >= 80) return "☀️";
+  if (tempF >= 60) return "⛅";
+  return "❄️";
+}
+
+function mlbCompassFromDeg(deg) {
+  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+function renderMLBDateLabel() {
+  document.getElementById("mlbDateLabel").textContent = mlbDateLabel(mlbState.selectedDate);
+}
+
+async function loadMLBSlate() {
+  const listEl = document.getElementById("mlbGameList");
+  listEl.innerHTML = `<div class="live-empty"><div class="big">Loading today's slate…</div></div>`;
+  renderMLBDateLabel();
+
+  await fetchMLBSchedule(mlbState.selectedDate);
+  renderMLBGameList();
+}
+
+function renderMLBGameList() {
+  const listEl = document.getElementById("mlbGameList");
+  const suggestionEl = document.getElementById("mlbSuggestionList");
+  suggestionEl.style.display = "none";
+  listEl.style.display = "block";
+
+  if (mlbState.lastError) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">Couldn't load today's games</div>
+        <div>${mlbState.lastError}</div>
+      </div>`;
+    return;
+  }
+
+  if (mlbState.games.length === 0) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">No games scheduled</div>
+        <div>Try a different date with the arrows above.</div>
+      </div>`;
+    return;
+  }
+
+  try {
+    listEl.innerHTML = mlbState.games.map(g => {
+      const home = g.teams.home, away = g.teams.away;
+      const park = MLB_PARKS[g.venue.id];
+      const factorClass = park ? (park.hrFactor >= 108 ? "high" : (park.hrFactor <= 92 ? "low" : "neutral")) : "neutral";
+      const pitcherLine = `
+        <span class="label">Probable pitchers</span>
+        ${away.probablePitcher?.fullName || "TBD"} @ ${home.probablePitcher?.fullName || "TBD"}
+      `;
+      return `
+        <div class="mlb-game-card" data-game-pk="${g.gamePk}">
+          <div class="mlb-game-top">
+            <div class="mlb-game-teams">${away.team.name} @ ${home.team.name}</div>
+          </div>
+          <div class="mlb-game-venue">${g.venue.name}</div>
+          <div class="mlb-game-pitchers">${pitcherLine}</div>
+          ${park ? `<div class="mlb-park-factor-pill ${factorClass}">HR factor ${park.hrFactor}</div>` : ""}
+        </div>`;
+    }).join("");
+
+    listEl.querySelectorAll(".mlb-game-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const gamePk = parseInt(card.dataset.gamePk, 10);
+        const game = mlbState.games.find(g => g.gamePk === gamePk);
+        if (game) selectMLBGame(game);
+      });
+    });
+  } catch (err) {
+    listEl.innerHTML = `
+      <div class="live-empty">
+        <div class="big">Something went wrong showing today's games</div>
+        <div>${err.message}</div>
+      </div>`;
+  }
+}
+
+async function selectMLBGame(game) {
+  mlbState.selectedGamePk = game.gamePk;
+  const listEl = document.getElementById("mlbGameList");
+  const suggestionEl = document.getElementById("mlbSuggestionList");
+  listEl.style.display = "none";
+  suggestionEl.style.display = "block";
+  suggestionEl.innerHTML = `
+    <button class="mlb-back-btn" id="mlbBackBtn">‹ All games</button>
+    <div class="live-empty"><div class="big">Pulling stats and weather…</div></div>`;
+  document.getElementById("mlbBackBtn")?.addEventListener("click", () => {
+    suggestionEl.style.display = "none";
+    listEl.style.display = "block";
+  });
+
+  try {
+    const { suggestions, weather, venueId } = await buildHRSuggestions(game);
+    renderMLBSuggestions(game, suggestions, weather, venueId);
+  } catch (err) {
+    suggestionEl.innerHTML = `
+      <button class="mlb-back-btn" id="mlbBackBtn">‹ All games</button>
+      <div class="live-empty">
+        <div class="big">Couldn't build suggestions for this game</div>
+        <div>${err.message}</div>
+      </div>`;
+    document.getElementById("mlbBackBtn")?.addEventListener("click", () => {
+      suggestionEl.style.display = "none";
+      listEl.style.display = "block";
+    });
+  }
+}
+
+function renderMLBSuggestions(game, suggestions, weather, venueId) {
+  const suggestionEl = document.getElementById("mlbSuggestionList");
+  const park = MLB_PARKS[venueId];
+
+  if (suggestions.length === 0) {
+    suggestionEl.innerHTML = `
+      <button class="mlb-back-btn" id="mlbBackBtn">‹ All games</button>
+      <div class="live-empty">
+        <div class="big">Not enough data for this game</div>
+        <div>Rosters or season stats weren't available for these teams yet
+        — common early in the season or for recent call-ups.</div>
+      </div>`;
+    document.getElementById("mlbBackBtn")?.addEventListener("click", () => {
+      suggestionEl.style.display = "none";
+      document.getElementById("mlbGameList").style.display = "block";
+    });
+    return;
+  }
+
+  const windCompass = mlbCompassFromDeg(weather.windDirectionDeg);
+  const top10 = suggestions.slice(0, 10);
+
+  suggestionEl.innerHTML = `
+    <button class="mlb-back-btn" id="mlbBackBtn">‹ All games</button>
+
+    <div class="mlb-intro-card" style="margin-top:0;">
+      <div class="data-card-title">${game.teams.away.team.name} @ ${game.teams.home.team.name}</div>
+      <div class="data-card-desc" style="margin-bottom:8px;">${game.venue.name}</div>
+      <span class="mlb-weather-pill">${mlbWeatherIcon(weather.tempF)} ${Math.round(weather.tempF)}°F · wind ${Math.round(weather.windSpeedMph)}mph from ${windCompass}</span>
+      ${park ? `<span class="mlb-park-factor-pill ${park.hrFactor >= 108 ? 'high' : (park.hrFactor <= 92 ? 'low' : 'neutral')}">HR factor ${park.hrFactor}</span>` : ""}
+      ${!weather.ok ? `<div class="caveat-box" style="margin-top:10px;">Couldn't reach the weather service — using neutral conditions as a fallback.</div>` : ""}
+    </div>
+
+    <div class="vega-ledger-title" style="padding:0 20px; margin-top:18px;">Ranked by combined power, park, and weather</div>
+
+    ${top10.map((s, i) => `
+      <div class="mlb-suggestion-card ${i === 0 ? 'top-pick' : ''}">
+        <div class="mlb-suggestion-top">
+          <div>
+            <div class="mlb-suggestion-rank">#${i + 1}</div>
+            <div class="mlb-suggestion-name">${s.name}</div>
+            <div class="mlb-suggestion-sub">${s.team} · ${s.position} · facing ${s.opposingPitcher}</div>
+          </div>
+          <div class="mlb-suggestion-score tnum">
+            ${(s.finalScore * 100).toFixed(1)}%
+            <span class="label">per PA</span>
+          </div>
+        </div>
+        <div class="mlb-factor-row">
+          <span>Season HR rate</span>
+          <span class="val tnum">${s.homeRuns} HR / ${s.plateAppearances} PA</span>
+        </div>
+        <div class="mlb-factor-row">
+          <span>Opposing pitcher HR rate allowed</span>
+          <span class="val tnum">${(s.opposingPitcherHRRate * 100).toFixed(1)}%</span>
+        </div>
+        <div class="mlb-factor-row">
+          <span>Park effect</span>
+          <span class="val tnum ${s.parkMultiplier > 1.02 ? 'boost' : (s.parkMultiplier < 0.98 ? 'drag' : '')}">${s.parkMultiplier > 1 ? '+' : ''}${((s.parkMultiplier - 1) * 100).toFixed(0)}%</span>
+        </div>
+        <div class="mlb-factor-row">
+          <span>Weather effect (wind + temp)</span>
+          <span class="val tnum ${s.weatherMultiplier > 1.02 ? 'boost' : (s.weatherMultiplier < 0.98 ? 'drag' : '')}">${s.weatherMultiplier > 1 ? '+' : ''}${((s.weatherMultiplier - 1) * 100).toFixed(0)}%</span>
+        </div>
+      </div>
+    `).join("")}
+
+    <div class="caveat-box" style="margin:16px 20px;">
+      <b>Read before you act on this.</b> "Facing" reflects each team's
+      probable starting pitcher's overall home-run rate, not a real
+      batter-vs-this-pitcher history — that level of matchup detail isn't
+      available for free. Lineups aren't official until close to first
+      pitch, so this draws from each team's active roster hitters, not a
+      confirmed batting order. Park orientation used for the wind
+      calculation is an approximation. Weather reflects conditions at the
+      time you opened this, not necessarily first pitch.
+    </div>
+  `;
+
+  document.getElementById("mlbBackBtn")?.addEventListener("click", () => {
+    suggestionEl.style.display = "none";
+    document.getElementById("mlbGameList").style.display = "block";
+  });
+}
+
+function mlbChangeDate(deltaDays) {
+  const d = new Date(mlbState.selectedDate);
+  d.setDate(d.getDate() + deltaDays);
+  mlbState.selectedDate = d;
+  loadMLBSlate();
+}
+
+
+/* ---------------- Sport mode toggle (World Cup <-> MLB) ---------------- */
+function switchToSoccerMode() {
+  document.getElementById("sportToggleSoccer").classList.add("active");
+  document.getElementById("sportToggleMLB").classList.remove("active");
+  document.getElementById("soccerLiveContainer").style.display = "block";
+  document.getElementById("mlbContainer").style.display = "none";
+}
+function switchToMLBMode() {
+  document.getElementById("sportToggleMLB").classList.add("active");
+  document.getElementById("sportToggleSoccer").classList.remove("active");
+  document.getElementById("soccerLiveContainer").style.display = "none";
+  document.getElementById("mlbContainer").style.display = "block";
+  stopLivePolling(); // no need to poll soccer scores while looking at MLB
+  if (mlbState.games.length === 0 && !mlbState.lastError) loadMLBSlate();
+}
+document.getElementById("sportToggleSoccer").addEventListener("click", switchToSoccerMode);
+document.getElementById("sportToggleMLB").addEventListener("click", switchToMLBMode);
+
+document.getElementById("mlbDateBack").addEventListener("click", () => mlbChangeDate(-1));
+document.getElementById("mlbDateForward").addEventListener("click", () => mlbChangeDate(1));
+document.getElementById("mlbRefreshBtn").addEventListener("click", () => {
+  mlbState.battersCache = {};
+  mlbState.pitchersCache = {};
+  mlbState.weatherCache = {};
+  loadMLBSlate();
+});
+
+
+/* ---------------- Boot ---------------- */
+loadMatches();
+refitModels();
+populateTeamSelects();
+renderDataScreen();
+loadApiKey();
+renderLiveScreen();
+loadVegaState();
+renderVegaScreen();
+if (vegaState.enabled && liveState.apiKey) startVegaPolling();
+initInstallBanner();
+</script></body></html>
